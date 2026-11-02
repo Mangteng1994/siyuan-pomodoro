@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>番茄钟</title>
+<style>
+  :root { color-scheme: light dark; font-family: "Microsoft YaHei UI", system-ui, sans-serif; }
+  body { margin: 0; padding: 8px 10px; user-select: none; }
+  #clock { font-size: 40px; line-height: 1.1; text-align: center; font-variant-numeric: tabular-nums; }
+  #info { font-size: 12px; text-align: center; opacity: .8; margin: 2px 0 6px; min-height: 30px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .row { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+  button { padding: 3px 10px; font-size: 12px; cursor: pointer; }
+</style>
+</head>
+<body>
+  <div id="clock">--:--</div>
+  <div id="info"></div>
+  <div class="row">
+    <button id="tpause">暂停</button>
+    <button id="tend">结束</button>
+    <button id="tretry" style="display:none">重试写入</button>
+    <button id="tdiscard" style="display:none">放弃</button>
+    <button id="tclear" style="display:none">清除</button>
+  </div>
+<script src="common.js"></script>
+<script>
+const { invoke } = window.__TAURI__.core;
+const $ = (id) => document.getElementById(id);
+let st = null;
+async function load() { try { st = await invoke("timer_get"); } catch (e) { $("info").textContent = String(e); } render(); }
+function render() {
+  $("clock").textContent = st ? TimerView.fmt(TimerView.remaining(st)) : "--:--";
+  document.title = st && st.status !== "finished" ? `${TimerView.fmt(TimerView.remaining(st))} 番茄钟` : "番茄钟";
+  $("info").textContent = st ? TimerView.info(st) : "没有计时（请在主窗口选任务开始）";
+  const f = TimerView.flags(st);
+  $("tpause").style.display = $("tend").style.display = f.canPause ? "" : "none";
+  $("tpause").textContent = f.pauseLabel;
+  $("tretry").style.display = f.canRetry ? "" : "none";
+  $("tdiscard").style.display = f.canDiscard ? "" : "none";
+  $("tclear").style.display = f.canClear ? "" : "none";
+}
+const cmd = async (name, args) => { try { await invoke(name, args); } catch (e) { $("info").textContent = String(e); } };
+$("tpause").onclick = () => cmd("timer_toggle_pause");
+$("tend").onclick = () => cmd("timer_end");
+$("tretry").onclick = () => cmd("timer_retry", { port: st.port });
+$("tclear").onclick = () => cmd("timer_clear");
+$("tdiscard").onclick = () => { if (confirm("放弃后这次计时不会写入番茄记录，确定吗？")) cmd("timer_discard"); };
+window.__TAURI__.event.listen("timer-changed", load);
+setInterval(render, 250);
+load();
+</script>
+</body>
+</html>

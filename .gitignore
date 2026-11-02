@@ -1,0 +1,8 @@
+target/
+node_modules/
+test-workspace/
+siyuan-plugin-task-note-management/
+scripts/*.log
+scripts/*.err
+scripts/*.out
+*.pid.json

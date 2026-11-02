@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>思源番茄钟</title>
+<style>
+  :root { color-scheme: light dark; font-family: "Microsoft YaHei UI", system-ui, sans-serif; }
+  body { margin: 0; padding: 16px; }
+  h2 { margin: 0 0 12px; font-size: 16px; }
+  label { display: block; margin: 10px 0 4px; font-size: 13px; opacity: .8; }
+  input { width: 100%; box-sizing: border-box; padding: 6px 8px; font-size: 13px; }
+  .row { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+  button { padding: 6px 12px; font-size: 13px; cursor: pointer; }
+  #status { margin-top: 14px; padding: 8px 10px; border-radius: 6px; background: rgba(128,128,128,.15); font-size: 13px; }
+  #msg { margin-top: 10px; font-size: 13px; white-space: pre-wrap; }
+  .ok { color: #2a8a3e; } .bad { color: #c0392b; }
+</style>
+</head>
+<body>
+  <h2>内核</h2>
+  <label>内核程序路径</label>
+  <input id="kernel_path">
+  <label>工作空间</label>
+  <input id="workspace" placeholder="例如 C:\SiYuanData">
+  <label>端口</label>
+  <input id="port" type="number" min="1" max="65535">
+  <div class="row">
+    <button id="start">启动内核</button>
+    <button id="stop">停止内核</button>
+    <button id="ui">打开思源界面</button>
+  </div>
+  <div id="status">检测中…</div>
+  <div id="msg"></div>
+
+  <h2 style="margin-top:22px">任务</h2>
+  <div class="row" style="margin-top:0">
+    <select id="scope"><option value="today">今天</option><option value="all">全部（含历史）</option></select>
+    <input id="keyword" placeholder="关键词（可空）" style="flex:1;width:auto">
+    <label style="margin:0;display:flex;align-items:center;gap:4px"><input id="done" type="checkbox" style="width:auto">含已完成</label>
+    <button id="search">搜索</button>
+  </div>
+  <div id="taskinfo" style="margin-top:8px;font-size:12px;opacity:.7"></div>
+  <ul id="tasks" style="list-style:none;padding:0;margin:6px 0 0"></ul>
+  <div id="selected" style="margin-top:8px;font-size:13px"></div>
+
+  <h2 style="margin-top:22px">番茄钟</h2>
+  <div id="clock" style="font-size:44px;font-variant-numeric:tabular-nums;text-align:center;margin:6px 0">25:00</div>
+  <div id="clockinfo" style="text-align:center;font-size:13px;opacity:.75;min-height:18px"></div>
+  <div class="row" style="justify-content:center">
+    <label style="margin:0;display:flex;align-items:center;gap:4px">时长
+      <input id="minutes" type="number" min="0.1" step="any" value="25" style="width:70px">分钟</label>
+    <button id="tstart">开始</button>
+    <button id="tpause">暂停</button>
+    <button id="tend">提前结束</button>
+    <button id="tretry" style="display:none">重试写入</button>
+    <button id="tdiscard" style="display:none">放弃记录</button>
+    <button id="tmini">迷你窗口</button>
+    <button id="tclear">清除</button>
+  </div>
+<script src="common.js"></script>
+<script>
+const { invoke } = window.__TAURI__.core;
+const $ = (id) => document.getElementById(id);
+const readConfig = () => ({ kernel_path: $("kernel_path").value.trim(), workspace: $("workspace").value.trim(), port: Number($("port").value) });
+const say = (text, ok = true) => { $("msg").textContent = text; $("msg").className = ok ? "ok" : "bad"; };
+
+async function refresh() {
+  try {
+    const s = await invoke("kernel_status", { port: Number($("port").value) });
+    $("status").textContent = s.running
+      ? `内核运行中（版本 ${s.version}）${s.owned ? "，由本工具启动" : "，不是本工具启动的，本工具不会停止它"}`
+      : "内核未运行";
+  } catch (e) { $("status").textContent = "状态检测失败：" + e; }
+}
+async function act(name, args, doneMsg) {
+  say("请稍候…");
+  try { const r = await invoke(name, args); say(doneMsg || r || "完成"); }
+  catch (e) { say(String(e), false); }
+  refresh();
+}
+$("start").onclick = async () => { await invoke("save_config", { config: readConfig() }); act("kernel_start", { config: readConfig() }); };
+$("stop").onclick = () => act("kernel_stop", { port: Number($("port").value) });
+$("ui").onclick = () => act("open_ui", { port: Number($("port").value) }, "已用默认浏览器打开");
+["kernel_path", "workspace", "port"].forEach((id) => ($(id).onchange = () => invoke("save_config", { config: readConfig() })));
+
+let selectedTask = null;
+function pick(task, li) {
+  selectedTask = task;
+  document.querySelectorAll("#tasks li").forEach((x) => (x.style.background = ""));
+  li.style.background = "rgba(80,140,255,.2)";
+  $("selected").textContent = `已选择：${task.title}${task.block_id ? "（已绑定块）" : "（未绑定块）"}`;
+}
+async function searchTasks() {
+  $("taskinfo").textContent = "搜索中…"; $("tasks").replaceChildren();
+  try {
+    const list = await invoke("search_tasks", {
+      port: Number($("port").value), scope: $("scope").value, keyword: $("keyword").value, includeCompleted: $("done").checked,
+    });
+    $("taskinfo").textContent = `共 ${list.length} 条`;
+    for (const t of list) {
+      const li = document.createElement("li");
+      li.style.cssText = "padding:5px 6px;cursor:pointer;border-bottom:1px solid rgba(128,128,128,.2);font-size:13px";
+      li.textContent = `${t.completed ? "✔ " : ""}${t.title}　${t.date || "无日期"}${t.block_id ? "" : "　[无块]"}`;
+      if (t.completed) li.style.opacity = ".6";
+      li.onclick = () => pick(t, li);
+      $("tasks").appendChild(li);
+    }
+  } catch (e) { $("taskinfo").textContent = ""; say(String(e), false); }
+}
+$("search").onclick = searchTasks;
+$("keyword").onkeydown = (e) => { if (e.key === "Enter") searchTasks(); };
+
+// ---- 番茄钟：计时和状态都在后端，这里只是视图（迷你窗口读同一份状态） ----
+let timerState = null;
+async function loadTimer() {
+  try { timerState = await invoke("timer_get"); } catch (e) { say(String(e), false); }
+  renderClock();
+}
+function renderClock() {
+  const s = timerState;
+  const remaining = s ? TimerView.remaining(s) : Number($("minutes").value) * 60000;
+  $("clock").textContent = TimerView.fmt(remaining);
+  document.title = s && s.status !== "finished" ? `${TimerView.fmt(remaining)} 思源番茄钟` : "思源番茄钟";
+  $("clockinfo").textContent = TimerView.info(s);
+  const f = TimerView.flags(s);
+  $("tstart").disabled = !f.canStart;
+  $("tpause").disabled = !f.canPause; $("tpause").textContent = f.pauseLabel;
+  $("tend").disabled = !f.canEnd;
+  $("tclear").disabled = !f.canClear; // 记录没写成功前不允许清除，避免丢记录
+  $("tretry").style.display = f.canRetry ? "" : "none";
+  $("tdiscard").style.display = f.canDiscard ? "" : "none";
+  $("minutes").disabled = !!s;
+}
+const cmd = async (name, args) => { try { await invoke(name, args); } catch (e) { say(String(e), false); } };
+$("tstart").onclick = () => {
+  const minutes = Number($("minutes").value);
+  if (!selectedTask) return say("请先在上面的任务列表里选择一个任务", false);
+  if (!(minutes > 0)) return say("时长必须大于 0", false);
+  say("");
+  cmd("timer_start", { task: { id: selectedTask.id, title: selectedTask.title, block_id: selectedTask.block_id }, minutes, port: Number($("port").value) });
+};
+$("tpause").onclick = () => cmd("timer_toggle_pause");
+$("tend").onclick = () => cmd("timer_end");
+$("tretry").onclick = () => cmd("timer_retry", { port: Number($("port").value) });
+$("tclear").onclick = () => cmd("timer_clear");
+$("tdiscard").onclick = () => { if (confirm("放弃后这次计时不会写入番茄记录，确定吗？")) cmd("timer_discard"); };
+$("tmini").onclick = () => cmd("open_mini");
+$("minutes").oninput = () => { if (!timerState) renderClock(); };
+window.__TAURI__.event.listen("timer-changed", loadTimer);
+setInterval(renderClock, 250);
+
+(async () => {
+  const c = await invoke("get_config");
+  $("kernel_path").value = c.kernel_path; $("workspace").value = c.workspace; $("port").value = c.port;
+  refresh(); setInterval(refresh, 3000);
+  await loadTimer();
+  const s = timerState;
+  if (s && s.recovered) {
+    say(s.status === "finished"
+      ? (s.written ? `上次计时已结束并已写入：${s.task.title}` : `检测到上次结束后还没写入的记录，正在补写：${s.task.title}`)
+      : s.status === "paused" ? `已从上次的计时恢复（暂停中）：${s.task.title}`
+      : `已从上次的计时恢复：${s.task.title}（程序关闭期间的时间也算在计时里）`);
+  }
+})();
+</script>
+</body>
+</html>
