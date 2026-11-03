@@ -190,6 +190,7 @@ pub fn init(app: &mut tauri::App) -> Result<(), String> {
             }
         };
         if finished {
+            remind(&handle);
             notify(&handle);
             spawn_write(handle.clone(), shared.clone());
         }
@@ -338,12 +339,39 @@ pub fn timer_discard(app: AppHandle, state: State<TimerHandle>) -> Result<(), St
 /// 打开（或唤起）置顶的迷你计时窗口。
 #[tauri::command]
 pub async fn open_mini(app: AppHandle) -> Result<(), String> {
+    show_mini(&app)
+}
+
+#[cfg(windows)]
+extern "system" {
+    fn MessageBeep(kind: u32) -> i32;
+}
+
+/// 自然到点的提醒：连响三声系统提示音，并把迷你窗口弹出到最前（没开则新开一个）。
+fn remind(app: &AppHandle) {
+    std::thread::spawn(|| {
+        for _ in 0..3 {
+            #[cfg(windows)]
+            unsafe {
+                MessageBeep(0x30); // MB_ICONEXCLAMATION
+            }
+            std::thread::sleep(Duration::from_millis(700));
+        }
+    });
+    let _ = show_mini(app);
+    if let Some(w) = app.get_webview_window("mini") {
+        let _ = w.request_user_attention(Some(tauri::UserAttentionType::Critical));
+    }
+}
+
+fn show_mini(app: &AppHandle) -> Result<(), String> {
     if let Some(w) = app.get_webview_window("mini") {
         let _ = w.show();
+        let _ = w.unminimize();
         let _ = w.set_focus();
         return Ok(());
     }
-    tauri::WebviewWindowBuilder::new(&app, "mini", tauri::WebviewUrl::App("mini.html".into()))
+    tauri::WebviewWindowBuilder::new(app, "mini", tauri::WebviewUrl::App("mini.html".into()))
         .title("番茄钟")
         .inner_size(250.0, 160.0)
         .resizable(false)
