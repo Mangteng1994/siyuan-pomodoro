@@ -4,33 +4,136 @@
 <meta charset="utf-8">
 <title>番茄钟</title>
 <style>
-  :root { color-scheme: light dark; font-family: "Microsoft YaHei UI", system-ui, sans-serif; }
-  body { margin: 0; padding: 8px 10px; user-select: none; }
+  :root { color-scheme: light dark; font-family: "Microsoft YaHei UI", system-ui, sans-serif; --fg: CanvasText; --bg: Canvas; --accent: #e5483d; }
+  html, body { margin: 0; height: 100%; overflow: hidden; user-select: none; }
+  body { box-sizing: border-box; }
+  button { cursor: pointer; font: inherit; }
+
+  /* 普通模式：和之前一样的小窗，带按钮 */
+  #normal { padding: 8px 10px; }
   #clock { font-size: 40px; line-height: 1.1; text-align: center; font-variant-numeric: tabular-nums; }
   #info { font-size: 12px; text-align: center; opacity: .8; margin: 2px 0 6px; min-height: 30px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
   .row { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
-  button { padding: 3px 10px; font-size: 12px; cursor: pointer; }
+  #normal button { padding: 3px 10px; font-size: 12px; }
+
+  /* 迷你模式：无边框、透明背景、可拖动，悬停才出按钮 */
+  #compact { display: none; position: relative; width: 100%; height: 100%; }
+  /* color-scheme 会让画布不透明，迷你模式要透明就必须去掉，颜色改用明确的变量 */
+  html.compact { color-scheme: normal; background: transparent; --fg: #222; --bg: #fff; }
+  @media (prefers-color-scheme: dark) { html.compact { --fg: #eee; --bg: #2b2b2b; } }
+  body.compact { background: transparent; color: var(--fg); }
+  body.compact #normal { display: none; }
+  body.compact #compact { display: block; }
+  .cbtn { border: 0; border-radius: 6px; background: rgba(255,255,255,.92); color: #2f2f2f; padding: 0; line-height: 1; display: inline-flex; align-items: center; justify-content: center; }
+  .acts { display: none; gap: 3px; align-items: center; }
+  #compact:hover .acts { display: flex; }
+
+  /* 圆环 */
+  #ring { display: none; position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(from -90deg, var(--accent) var(--deg, 0deg), rgba(128,128,128,.28) var(--deg, 0deg)); }
+  #ring .inner { position: absolute; inset: 4px; border-radius: 50%; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  #ring .t { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  #ring .acts { position: absolute; inset: 0; align-items: center; justify-content: center; background: var(--bg); border-radius: 50%; margin: 4px; }
+  #ring .cbtn { width: 20px; height: 20px; font-size: 11px; background: rgba(128,128,128,.25); color: var(--fg); }
+  body.m-ring #ring { display: block; }
+  #ring .cycle { position: absolute; top: -2px; right: -2px; width: 14px; height: 14px; font-size: 9px; display: none; z-index: 3; }
+  body.m-ring #compact:hover .cycle { display: inline-flex; }
+
+  /* 横向进度条 */
+  #bar { display: none; position: absolute; inset: 0; border-radius: 10px; background: var(--bg); box-shadow: 0 2px 10px rgba(0,0,0,.28); padding: 3px 8px 5px; box-sizing: border-box; flex-direction: column; justify-content: space-between; }
+  body.m-bar #bar { display: flex; }
+  #bar .title { font-size: 10px; opacity: .65; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #bar .line { display: flex; align-items: center; justify-content: space-between; }
+  #bar .t { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  #bar .cbtn { width: 18px; height: 18px; font-size: 10px; background: rgba(128,128,128,.25); color: var(--fg); }
+  .track { height: 4px; border-radius: 2px; background: rgba(128,128,128,.28); overflow: hidden; }
+  .fill { height: 100%; width: 0; background: var(--accent); }
+
+  /* 极简进度条：只有一条线，悬停出按钮 */
+  #minimal { display: none; position: absolute; inset: 0; border-radius: 6px; background: rgba(128,128,128,.18); padding: 0 6px; box-sizing: border-box; align-items: center; }
+  body.m-minimal #minimal { display: flex; }
+  #minimal .track { flex: 1; height: 6px; }
+  #minimal .acts { position: absolute; inset: 0; justify-content: center; background: var(--bg); border-radius: 6px; }
+  #minimal .cbtn { width: 16px; height: 16px; font-size: 9px; background: rgba(128,128,128,.25); color: var(--fg); }
+  #minimal .tt { position: absolute; left: 0; right: 0; text-align: center; font-size: 9px; font-weight: 700; mix-blend-mode: difference; color: #fff; pointer-events: none; }
 </style>
 </head>
 <body>
-  <div id="clock">--:--</div>
-  <div id="info"></div>
-  <div class="row">
-    <button id="tpause">暂停</button>
-    <button id="tend">结束</button>
-    <button id="tretry" style="display:none">重试写入</button>
-    <button id="tdiscard" style="display:none">放弃</button>
-    <button id="tclear" style="display:none">清除</button>
+  <div id="normal">
+    <div id="clock">--:--</div>
+    <div id="info"></div>
+    <div class="row">
+      <button id="tpause">暂停</button>
+      <button id="tend">结束</button>
+      <button id="tretry" style="display:none">重试写入</button>
+      <button id="tdiscard" style="display:none">放弃</button>
+      <button id="tclear" style="display:none">清除</button>
+      <button id="tshrink" title="切换到迷你模式">⭕ 迷你</button>
+    </div>
   </div>
+
+  <div id="compact">
+    <div id="ring">
+      <div class="inner"><span class="t" id="rt">--:--</span></div>
+      <div class="acts"><button class="cbtn" data-act="pause" title="暂停/继续">⏯</button><button class="cbtn" data-act="end" title="结束">⏹</button></div>
+      <button class="cbtn cycle" data-act="cycle" title="切换样式">⇄</button>
+    </div>
+    <div id="bar">
+      <div class="title" id="bt"></div>
+      <div class="line">
+        <span class="t" id="bc">--:--</span>
+        <span class="acts" style="display:flex"><button class="cbtn" data-act="pause" title="暂停/继续">⏯</button><button class="cbtn" data-act="end" title="结束">⏹</button><button class="cbtn" data-act="cycle" title="切换样式">⇄</button></span>
+      </div>
+      <div class="track"><div class="fill" id="bf"></div></div>
+    </div>
+    <div id="minimal">
+      <div class="track"><div class="fill" id="mf"></div></div>
+      <span class="tt" id="mt"></span>
+      <div class="acts"><button class="cbtn" data-act="pause" title="暂停/继续">⏯</button><button class="cbtn" data-act="end" title="结束">⏹</button><button class="cbtn" data-act="cycle" title="切换样式">⇄</button></div>
+    </div>
+  </div>
+
 <script src="common.js"></script>
 <script>
 const { invoke } = window.__TAURI__.core;
 const $ = (id) => document.getElementById(id);
+const STYLES = ["ring", "bar", "minimal"];
 let st = null;
+let preferred = "normal"; // normal | ring | bar | minimal
+try { preferred = localStorage.getItem("miniMode") || "normal"; } catch {}
+if (preferred !== "normal" && !STYLES.includes(preferred)) preferred = "normal";
+let applied = null;
+
+// 没有计时、或结束后还要处理（清除/重试/放弃）时，回到普通模式，因为迷你模式没有这些按钮
+function effectiveMode() {
+  const live = st && st.status !== "finished";
+  return live ? preferred : "normal";
+}
+function applyMode() {
+  const m = effectiveMode();
+  if (m === applied) return;
+  applied = m;
+  document.body.classList.toggle("compact", m !== "normal");
+  document.documentElement.classList.toggle("compact", m !== "normal");
+  for (const s of STYLES) document.body.classList.toggle("m-" + s, m === s);
+  invoke("set_mini_mode", { mode: m }).catch((e) => ($("info").textContent = String(e)));
+}
+function setPreferred(m) {
+  preferred = m;
+  try { localStorage.setItem("miniMode", m); } catch {}
+  applyMode();
+  render();
+}
+
 async function load() { try { st = await invoke("timer_get"); } catch (e) { $("info").textContent = String(e); } render(); }
+function progress() {
+  if (!st) return 0;
+  return Math.max(0, Math.min(1, TimerView.elapsed(st) / st.planned_ms));
+}
 function render() {
-  $("clock").textContent = st ? TimerView.fmt(TimerView.remaining(st)) : "--:--";
-  document.title = st && st.status !== "finished" ? `${TimerView.fmt(TimerView.remaining(st))} 番茄钟` : "番茄钟";
+  applyMode();
+  const time = st ? TimerView.fmt(TimerView.remaining(st)) : "--:--";
+  $("clock").textContent = time;
+  document.title = st && st.status !== "finished" ? `${time} 番茄钟` : "番茄钟";
   $("info").textContent = st ? TimerView.info(st) : "没有计时（请在主窗口选任务开始）";
   const f = TimerView.flags(st);
   $("tpause").style.display = $("tend").style.display = f.canPause ? "" : "none";
@@ -38,13 +141,48 @@ function render() {
   $("tretry").style.display = f.canRetry ? "" : "none";
   $("tdiscard").style.display = f.canDiscard ? "" : "none";
   $("tclear").style.display = f.canClear ? "" : "none";
+  $("tshrink").style.display = f.canPause ? "" : "none";
+
+  const p = progress();
+  document.documentElement.style.setProperty("--deg", `${p * 360}deg`);
+  document.documentElement.style.setProperty("--accent", st && st.status === "paused" ? "#e6a23c" : "#e5483d");
+  $("rt").textContent = time;
+  $("bc").textContent = time;
+  $("bt").textContent = st ? st.task.title : "";
+  $("bf").style.width = $("mf").style.width = `${p * 100}%`;
+  $("mt").textContent = time;
 }
+
 const cmd = async (name, args) => { try { await invoke(name, args); } catch (e) { $("info").textContent = String(e); } };
 $("tpause").onclick = () => cmd("timer_toggle_pause");
 $("tend").onclick = () => cmd("timer_end");
 $("tretry").onclick = () => cmd("timer_retry", { port: st.port });
 $("tclear").onclick = () => cmd("timer_clear");
 $("tdiscard").onclick = () => { if (confirm("放弃后这次计时不会写入番茄记录，确定吗？")) cmd("timer_discard"); };
+$("tshrink").onclick = () => setPreferred(STYLES.includes(preferred) ? preferred : "bar");
+
+// 迷你模式里的按钮：暂停/继续、结束、切换样式（圆环→横条→极简→普通→圆环）
+$("compact").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-act]");
+  if (!b) return;
+  const a = b.dataset.act;
+  if (a === "pause") cmd("timer_toggle_pause");
+  else if (a === "end") cmd("timer_end");
+  else if (a === "cycle") {
+    const i = STYLES.indexOf(preferred);
+    setPreferred(i === STYLES.length - 1 ? "normal" : STYLES[i + 1]);
+  }
+});
+// 点圆环本体也能暂停/继续；双击切回普通模式
+$("ring").addEventListener("click", (e) => { if (!e.target.closest("button")) cmd("timer_toggle_pause"); });
+$("compact").addEventListener("dblclick", (e) => { if (!e.target.closest("button")) setPreferred("normal"); });
+// 无边框窗口：在空白处按下鼠标拖动窗口
+document.body.addEventListener("mousedown", (e) => {
+  if (e.button === 0 && applied !== "normal" && !e.target.closest("button")) {
+    window.__TAURI__.window.getCurrentWindow().startDragging().catch(() => {});
+  }
+});
+
 window.__TAURI__.event.listen("timer-changed", load);
 setInterval(render, 250);
 load();

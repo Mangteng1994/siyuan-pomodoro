@@ -279,7 +279,8 @@ fn main() {
             timer::timer_retry,
             timer::timer_clear,
             timer::timer_discard,
-            timer::open_mini
+            timer::open_mini,
+            timer::set_mini_mode
         ])
         .run(tauri::generate_context!())
         .expect("启动失败");

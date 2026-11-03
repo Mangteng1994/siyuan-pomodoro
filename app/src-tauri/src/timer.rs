@@ -364,6 +364,22 @@ fn remind(app: &AppHandle) {
     }
 }
 
+/// 迷你窗口的外观：normal 是带标题栏的普通小窗，其余是无边框的紧凑样式（尺寸对应原插件的三种迷你样式）。
+#[tauri::command]
+pub fn set_mini_mode(app: AppHandle, mode: String) -> Result<(), String> {
+    let w = app.get_webview_window("mini").ok_or("迷你窗口未打开")?;
+    let (width, height, decorations) = match mode.as_str() {
+        "ring" => (64.0, 64.0, false),
+        "bar" => (190.0, 46.0, false),
+        "minimal" => (150.0, 22.0, false),
+        _ => (250.0, 160.0, true),
+    };
+    w.set_decorations(decorations).map_err(|e| e.to_string())?;
+    // 无边框时不要系统阴影/边框，否则圆环外面会露出一个方框
+    w.set_shadow(decorations).map_err(|e| e.to_string())?;
+    w.set_size(tauri::LogicalSize::new(width, height)).map_err(|e| e.to_string())
+}
+
 fn show_mini(app: &AppHandle) -> Result<(), String> {
     if let Some(w) = app.get_webview_window("mini") {
         let _ = w.show();
@@ -376,6 +392,7 @@ fn show_mini(app: &AppHandle) -> Result<(), String> {
         .inner_size(250.0, 160.0)
         .resizable(false)
         .always_on_top(true)
+        .transparent(true)
         .build()
         .map(|_| ())
         .map_err(|e| e.to_string())
