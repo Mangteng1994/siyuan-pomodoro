@@ -380,7 +380,7 @@ pub fn set_mini_mode(app: AppHandle, mode: String) -> Result<(), String> {
     w.set_size(tauri::LogicalSize::new(width, height)).map_err(|e| e.to_string())
 }
 
-fn show_mini(app: &AppHandle) -> Result<(), String> {
+pub fn show_mini(app: &AppHandle) -> Result<(), String> {
     if let Some(w) = app.get_webview_window("mini") {
         let _ = w.show();
         let _ = w.unminimize();

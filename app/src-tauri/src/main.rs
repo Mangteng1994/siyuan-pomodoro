@@ -258,11 +258,58 @@ async fn search_tasks(
 
 mod timer;
 
+fn show_main(app: &tauri::AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.show();
+        let _ = w.unminimize();
+        let _ = w.set_focus();
+    }
+}
+
+/// 托盘常驻：关窗口只是隐藏，计时、提醒、写记录照常；真正退出走托盘菜单。
+fn init_tray(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    use tauri::menu::{Menu, MenuItem};
+    use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+    let open_main = MenuItem::with_id(app, "main", "打开主窗口", true, None::<&str>)?;
+    let open_mini = MenuItem::with_id(app, "mini", "打开迷你窗口", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", "退出（计时靠记录文件，下次启动恢复）", true, None::<&str>)?;
+    let menu = Menu::with_items(app, &[&open_main, &open_mini, &quit])?;
+    let mut builder = TrayIconBuilder::new()
+        .tooltip("思源番茄钟")
+        .menu(&menu)
+        .show_menu_on_left_click(false)
+        .on_menu_event(|app, e| match e.id().as_ref() {
+            "main" => show_main(app),
+            "mini" => {
+                let _ = timer::show_mini(app);
+            }
+            "quit" => app.exit(0),
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, e| {
+            if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = e {
+                show_main(tray.app_handle());
+            }
+        });
+    if let Some(icon) = app.default_window_icon() {
+        builder = builder.icon(icon.clone());
+    }
+    builder.build(app)?;
+    Ok(())
+}
+
 fn main() {
     tauri::Builder::default()
         .setup(|app| {
             timer::init(app)?;
+            init_tray(app)?;
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let _ = window.hide();
+            }
         })
         .invoke_handler(tauri::generate_handler![
             get_config,
