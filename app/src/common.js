@@ -16,7 +16,7 @@ const TimerView = {
       const head = `${s.completed ? "已完成" : "已提前结束"}：${s.task.title}（实际 ${(s.actual_ms / 60000).toFixed(1)} 分钟）　`;
       if (s.written) return head + `✔ 已写入记录（${s.duration} 分钟）`;
       if (s.writing) return head + "写入记录中…";
-      return head + `✘ 写入失败：${s.error ?? "尚未写入"}`;
+      return head + `✘ 写入失败：${s.error ?? "尚未写入"}（会每 30 秒自动重试，也可手动重试）`;
     }
     return `${s.status === "paused" ? "已暂停" : "计时中"}：${s.task.title}`;
   },

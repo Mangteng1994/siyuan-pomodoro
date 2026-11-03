@@ -53,6 +53,9 @@ pub struct TimerState {
     pub recovered: bool,
 }
 
+/// 记录写入失败后的自动重试间隔
+const RETRY_INTERVAL: Duration = Duration::from_secs(30);
+
 pub type Shared = Arc<Mutex<Option<TimerState>>>;
 
 pub struct TimerHandle(pub Shared);
@@ -171,9 +174,21 @@ pub fn init(app: &mut tauri::App) -> Result<(), String> {
     // 恢复时已结束但没写入的，直接补写
     spawn_write(handle.clone(), shared.clone());
 
-    // 到点检测线程
-    std::thread::spawn(move || loop {
+    // 到点检测线程；写入失败（比如内核没开）后每隔一段时间自动重试，内核一起来记录就补上
+    std::thread::spawn(move || {
+        let mut last_try = std::time::Instant::now();
+        loop {
         std::thread::sleep(Duration::from_millis(250));
+        let retry_due = {
+            let g = shared.lock().unwrap();
+            g.as_ref().map_or(false, |s| {
+                s.status == Status::Finished && !s.written && !s.writing && s.error.is_some()
+            })
+        };
+        if retry_due && last_try.elapsed() >= RETRY_INTERVAL {
+            last_try = std::time::Instant::now();
+            spawn_write(handle.clone(), shared.clone());
+        }
         let finished = {
             let mut g = shared.lock().unwrap();
             match g.as_mut() {
@@ -192,7 +207,9 @@ pub fn init(app: &mut tauri::App) -> Result<(), String> {
         if finished {
             remind(&handle);
             notify(&handle);
+            last_try = std::time::Instant::now();
             spawn_write(handle.clone(), shared.clone());
+        }
         }
     });
     Ok(())
