@@ -12,7 +12,7 @@ public class ShotWin {
   [DllImport("user32.dll")] static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
   [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
   public struct R { public int L, T, Rt, B; }
-  public static int[] Find(uint pid, string title) { int[] res = null; EnumWindows((h, x) => { uint p; GetWindowThreadProcessId(h, out p); var s = new StringBuilder(200); GetWindowText(h, s, 200); R r; GetWindowRect(h, out r); if (p == pid && IsWindowVisible(h) && s.ToString().Contains(title) && r.Rt - r.L > 50) res = new[]{r.L, r.T, r.Rt, r.B}; return true; }, IntPtr.Zero); return res; }
+  public static int[] Find(uint pid, string title) { int[] res = null; EnumWindows((h, x) => { uint p; GetWindowThreadProcessId(h, out p); var s = new StringBuilder(200); GetWindowText(h, s, 200); R r; GetWindowRect(h, out r); if (p == pid && IsWindowVisible(h) && s.ToString().Contains(title) && r.Rt - r.L > 50 && (res == null || (r.Rt - r.L) < (res[2] - res[0]))) res = new[]{r.L, r.T, r.Rt, r.B}; return true; }, IntPtr.Zero); return res; }
 }
 '@
 [ShotWin]::SetProcessDPIAware() | Out-Null

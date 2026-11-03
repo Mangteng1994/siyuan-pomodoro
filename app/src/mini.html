@@ -19,9 +19,9 @@
   /* 迷你模式：无边框、透明背景、可拖动，悬停才出按钮 */
   #compact { display: none; position: relative; width: 100%; height: 100%; }
   /* color-scheme 会让画布不透明，迷你模式要透明就必须去掉，颜色改用明确的变量 */
-  html.compact { color-scheme: normal; background: transparent; --fg: #222; --bg: #fff; }
-  @media (prefers-color-scheme: dark) { html.compact { --fg: #eee; --bg: #2b2b2b; } }
-  body.compact { background: transparent; color: var(--fg); }
+  html.compact { color-scheme: normal; background: var(--bg); --fg: #222; --bg: #fff; --track: #dcdcd8; --btn: #e8e8e4; }
+  @media (prefers-color-scheme: dark) { html.compact { --fg: #eee; --bg: #2b2b2b; --track: #484846; --btn: #3d3d3b; } }
+  body.compact { background: var(--bg); color: var(--fg); }
   body.compact #normal { display: none; }
   body.compact #compact { display: block; }
   .cbtn { border: 0; border-radius: 6px; background: rgba(255,255,255,.92); color: #2f2f2f; padding: 0; line-height: 1; display: inline-flex; align-items: center; justify-content: center; }
@@ -29,31 +29,31 @@
   #compact:hover .acts { display: flex; }
 
   /* 圆环 */
-  #ring { display: none; position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(from -90deg, var(--accent) var(--deg, 0deg), rgba(128,128,128,.28) var(--deg, 0deg)); }
+  #ring { display: none; position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(from -90deg, var(--accent) var(--deg, 0deg), var(--track) var(--deg, 0deg)); }
   #ring .inner { position: absolute; inset: 4px; border-radius: 50%; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; }
   #ring .t { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
   #ring .acts { position: absolute; inset: 0; align-items: center; justify-content: center; background: var(--bg); border-radius: 50%; margin: 4px; }
-  #ring .cbtn { width: 20px; height: 20px; font-size: 11px; background: rgba(128,128,128,.25); color: var(--fg); }
+  #ring .cbtn { width: 20px; height: 20px; font-size: 11px; background: var(--btn); color: var(--fg); }
   body.m-ring #ring { display: block; }
   #ring .cycle { position: absolute; top: -2px; right: -2px; width: 14px; height: 14px; font-size: 9px; display: none; z-index: 3; }
   body.m-ring #compact:hover .cycle { display: inline-flex; }
 
   /* 横向进度条 */
-  #bar { display: none; position: absolute; inset: 0; border-radius: 10px; background: var(--bg); box-shadow: 0 2px 10px rgba(0,0,0,.28); padding: 3px 8px 5px; box-sizing: border-box; flex-direction: column; justify-content: space-between; }
+  #bar { display: none; position: absolute; inset: 0; background: var(--bg); padding: 3px 8px 5px; box-sizing: border-box; flex-direction: column; justify-content: space-between; }
   body.m-bar #bar { display: flex; }
   #bar .title { font-size: 10px; opacity: .65; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #bar .line { display: flex; align-items: center; justify-content: space-between; }
   #bar .t { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
-  #bar .cbtn { width: 18px; height: 18px; font-size: 10px; background: rgba(128,128,128,.25); color: var(--fg); }
-  .track { height: 4px; border-radius: 2px; background: rgba(128,128,128,.28); overflow: hidden; }
+  #bar .cbtn { width: 18px; height: 18px; font-size: 10px; background: var(--btn); color: var(--fg); }
+  .track { height: 4px; border-radius: 2px; background: var(--track); overflow: hidden; }
   .fill { height: 100%; width: 0; background: var(--accent); }
 
   /* 极简进度条：只有一条线，悬停出按钮 */
-  #minimal { display: none; position: absolute; inset: 0; border-radius: 6px; background: rgba(128,128,128,.18); padding: 0 6px; box-sizing: border-box; align-items: center; }
+  #minimal { display: none; position: absolute; inset: 0; background: var(--bg); padding: 0 6px; box-sizing: border-box; align-items: center; }
   body.m-minimal #minimal { display: flex; }
   #minimal .track { flex: 1; height: 6px; }
   #minimal .acts { position: absolute; inset: 0; justify-content: center; background: var(--bg); border-radius: 6px; }
-  #minimal .cbtn { width: 16px; height: 16px; font-size: 9px; background: rgba(128,128,128,.25); color: var(--fg); }
+  #minimal .cbtn { width: 16px; height: 16px; font-size: 9px; background: var(--btn); color: var(--fg); }
   #minimal .tt { position: absolute; left: 0; right: 0; text-align: center; font-size: 9px; font-weight: 700; mix-blend-mode: difference; color: #fff; pointer-events: none; }
 </style>
 </head>

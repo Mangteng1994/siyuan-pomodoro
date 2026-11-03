@@ -480,7 +480,6 @@ pub fn show_mini(app: &AppHandle) -> Result<(), String> {
         .inner_size(250.0, 160.0)
         .resizable(false)
         .always_on_top(true)
-        .transparent(true)
         .build()
         .map(|_| ())
         .map_err(|e| e.to_string())
