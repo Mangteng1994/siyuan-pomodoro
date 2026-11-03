@@ -4,79 +4,206 @@
 <meta charset="utf-8">
 <title>思源番茄钟</title>
 <style>
-  :root { color-scheme: light dark; font-family: "Microsoft YaHei UI", system-ui, sans-serif; }
-  body { margin: 0; padding: 16px; }
-  h2 { margin: 0 0 12px; font-size: 16px; }
-  label { display: block; margin: 10px 0 4px; font-size: 13px; opacity: .8; }
-  input { width: 100%; box-sizing: border-box; padding: 6px 8px; font-size: 13px; }
-  .row { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
-  button { padding: 6px 12px; font-size: 13px; cursor: pointer; }
-  #status { margin-top: 14px; padding: 8px 10px; border-radius: 6px; background: rgba(128,128,128,.15); font-size: 13px; }
-  #msg { margin-top: 10px; font-size: 13px; white-space: pre-wrap; }
-  .ok { color: #2a8a3e; } .bad { color: #c0392b; }
+  :root {
+    color-scheme: light dark;
+    font-family: "Microsoft YaHei UI", system-ui, sans-serif;
+    --bg: #f6f6f4; --card: #ffffff; --line: rgba(0,0,0,.1); --fg: #1f1f1e; --sub: #6b6b68;
+    --accent: #e5483d; --accent-bg: rgba(229,72,61,.1); --ok: #2a8a3e; --bad: #c0392b; --track: rgba(128,128,128,.22);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #1c1c1b; --card: #262625; --line: rgba(255,255,255,.12); --fg: #ececea; --sub: #a3a3a0; --accent-bg: rgba(229,72,61,.2); --ok: #5fc274; --bad: #ec7a6f; }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--bg); color: var(--fg); font-size: 14px; display: flex; flex-direction: column; overflow: hidden; }
+  button { font: inherit; color: inherit; cursor: pointer; border: 1px solid var(--line); background: var(--card); border-radius: 8px; padding: 7px 14px; }
+  button:hover:not(:disabled) { border-color: var(--sub); }
+  button:disabled { opacity: .45; cursor: default; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.ghost { border-color: transparent; background: transparent; }
+  input[type=text], input[type=number] { font: inherit; color: var(--fg); background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; width: 100%; }
+  input:focus { outline: 2px solid var(--accent-bg); border-color: var(--accent); }
+
+  #bar { display: flex; align-items: center; gap: 8px; padding: 9px 14px; border-bottom: 1px solid var(--line); background: var(--card); }
+  #dot { width: 9px; height: 9px; border-radius: 50%; background: var(--sub); flex: none; }
+  #dot.on { background: var(--ok); }
+  #status { flex: 1; min-width: 0; font-size: 13px; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #bar button { padding: 4px 10px; font-size: 12px; }
+
+  main { flex: 1; min-height: 0; overflow-y: auto; }
+  .page { display: none; padding: 16px 18px 20px; }
+  .page.on { display: block; }
+
+  nav { display: flex; border-top: 1px solid var(--line); background: var(--card); }
+  nav button { flex: 1; border: 0; border-radius: 0; background: transparent; padding: 9px 0 8px; font-size: 12px; color: var(--sub); }
+  nav button.on { color: var(--accent); }
+  nav button b { display: block; font-size: 17px; font-weight: 400; line-height: 1.2; }
+
+  #msg { position: fixed; left: 14px; right: 14px; bottom: 64px; padding: 8px 12px; border-radius: 8px; background: var(--card); border: 1px solid var(--line); font-size: 13px; white-space: pre-wrap; display: none; }
+  #msg.ok { color: var(--ok); } #msg.bad { color: var(--bad); }
+
+  /* 计时页 */
+  #ring { width: 190px; height: 190px; margin: 4px auto 12px; border-radius: 50%; background: conic-gradient(from -90deg, var(--accent) var(--deg, 0deg), var(--track) var(--deg, 0deg)); display: flex; align-items: center; justify-content: center; }
+  #ring .in { width: 170px; height: 170px; border-radius: 50%; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  #clock { font-size: 40px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  #phase { font-size: 12px; color: var(--sub); margin-top: 2px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+  #taskcard { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  #taskcard .t { flex: 1; min-width: 0; }
+  #taskcard .name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #taskcard .doc { font-size: 12px; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #taskcard input { padding: 4px 8px; }
+  .chips { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin-bottom: 12px; }
+  .chip { padding: 5px 12px; border-radius: 16px; font-size: 13px; }
+  .chip.on { background: var(--accent-bg); border-color: var(--accent); color: var(--accent); }
+  .chips input { width: 64px; padding: 5px 8px; text-align: center; }
+  .btns { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .btns button { min-width: 84px; }
+  #runinfo { text-align: center; font-size: 13px; color: var(--sub); margin-bottom: 12px; min-height: 18px; }
+  .grp { display: none; } .grp.on { display: block; }
+
+  /* 任务页 */
+  .search { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .search label { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--sub); white-space: nowrap; }
+  .search label input { width: auto; }
+  #taskinfo { font-size: 12px; color: var(--sub); margin-bottom: 8px; }
+  .task { padding: 8px 12px; margin-bottom: 8px; cursor: pointer; }
+  .task:hover { border-color: var(--sub); }
+  .task.sel { border-color: var(--accent); background: var(--accent-bg); }
+  .task .name { font-weight: 600; }
+  .task .meta { font-size: 12px; color: var(--sub); margin-top: 2px; }
+  .task.done .name { opacity: .6; text-decoration: line-through; }
+
+  /* 设置页 */
+  h3 { font-size: 13px; margin: 18px 0 8px; color: var(--sub); font-weight: 600; }
+  h3:first-child { margin-top: 0; }
+  .f { margin-bottom: 10px; }
+  .f label { display: block; font-size: 12px; color: var(--sub); margin-bottom: 4px; }
+  .inl { display: flex; gap: 10px; align-items: center; }
+  .inl > div { flex: 1; }
 </style>
 </head>
 <body>
-  <h2>内核</h2>
-  <label>内核程序路径</label>
-  <input id="kernel_path">
-  <label>工作空间</label>
-  <input id="workspace" placeholder="例如 C:\SiYuanData">
-  <label>端口</label>
-  <input id="port" type="number" min="1" max="65535">
-  <div class="row">
-    <button id="start">启动内核</button>
-    <button id="stop">停止内核</button>
-    <button id="ui">打开思源界面</button>
+  <div id="bar">
+    <span id="dot"></span>
+    <span id="status">检测中…</span>
+    <button id="kstart">启动内核</button>
+    <button id="kstop" style="display:none">停止内核</button>
+    <button id="ui" title="用默认浏览器打开思源界面">打开思源界面</button>
   </div>
-  <div id="status">检测中…</div>
+
+  <main>
+    <section class="page on" id="p-timer">
+      <div id="ring"><div class="in"><div id="clock">25:00</div><div id="phase">准备开始</div></div></div>
+
+      <div class="grp on" id="g-pre">
+        <div class="card" id="taskcard">
+          <div class="t">
+            <div id="tc-sel" style="display:none"><div class="name" id="tc-name"></div><div class="doc" id="tc-doc"></div></div>
+            <div id="tc-free"><input id="freetitle" type="text" placeholder="自由专注（可填标题，默认“番茄专注”）"></div>
+          </div>
+          <button class="ghost" id="tc-pick">选任务</button>
+          <button class="ghost" id="tc-clear" style="display:none" title="取消选择，改为自由专注">✕</button>
+        </div>
+        <div class="chips" id="chips">
+          <button class="chip" data-m="15">15</button>
+          <button class="chip on" data-m="25">25</button>
+          <button class="chip" data-m="45">45</button>
+          <input id="minutes" type="number" min="0.1" step="any" value="25" title="自定义分钟数">
+          <span style="align-self:center;color:var(--sub);font-size:12px">分钟</span>
+        </div>
+        <div class="btns"><button class="primary" id="tstart" style="min-width:160px;padding:9px 0">开始</button></div>
+      </div>
+
+      <div class="grp" id="g-run">
+        <div id="runinfo"></div>
+        <div class="btns">
+          <button id="tpause">暂停</button>
+          <button id="tend">提前结束</button>
+          <button id="tmini">迷你窗口</button>
+        </div>
+      </div>
+
+      <div class="grp" id="g-post">
+        <div id="postinfo" style="text-align:center;font-size:13px;color:var(--sub);margin-bottom:12px"></div>
+        <div class="btns" id="breakbtns" style="margin-bottom:8px">
+          <button id="tshort">短休息</button>
+          <button id="tlong">长休息</button>
+        </div>
+        <div class="btns">
+          <button id="tretry" style="display:none">重试写入</button>
+          <button id="tdiscard" style="display:none">放弃记录</button>
+          <button class="primary" id="tclear">完成</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="page" id="p-tasks">
+      <div class="search">
+        <input id="keyword" type="text" placeholder="搜索任务（留空显示全部）">
+        <label><input id="done" type="checkbox">含已完成</label>
+      </div>
+      <div id="taskinfo"></div>
+      <div id="tasks"></div>
+    </section>
+
+    <section class="page" id="p-set">
+      <h3>内核</h3>
+      <div class="f"><label>内核程序路径</label><input id="kernel_path" type="text"></div>
+      <div class="f"><label>工作空间</label><input id="workspace" type="text" placeholder="例如 C:\SiYuanData"></div>
+      <div class="f"><label>端口</label><input id="port" type="number" min="1" max="65535" style="width:120px"></div>
+      <h3>休息时长（分钟）</h3>
+      <div class="inl">
+        <div><label style="font-size:12px;color:var(--sub)">短休息</label><input id="bshort" type="number" min="0.1" step="any"></div>
+        <div><label style="font-size:12px;color:var(--sub)">长休息</label><input id="blong" type="number" min="0.1" step="any"></div>
+      </div>
+    </section>
+  </main>
+
   <div id="msg"></div>
+  <nav>
+    <button class="on" data-p="timer"><b>◔</b>计时</button>
+    <button data-p="tasks"><b>☰</b>任务</button>
+    <button data-p="set"><b>⚙</b>设置</button>
+  </nav>
 
-  <h2 style="margin-top:22px">任务</h2>
-  <div class="row" style="margin-top:0">
-    <select id="scope"><option value="today">今天</option><option value="all">全部（含历史）</option></select>
-    <input id="keyword" placeholder="关键词（可空）" style="flex:1;width:auto">
-    <label style="margin:0;display:flex;align-items:center;gap:4px"><input id="done" type="checkbox" style="width:auto">含已完成</label>
-    <button id="search">搜索</button>
-  </div>
-  <div id="taskinfo" style="margin-top:8px;font-size:12px;opacity:.7"></div>
-  <ul id="tasks" style="list-style:none;padding:0;margin:6px 0 0"></ul>
-  <div id="selected" style="margin-top:8px;font-size:13px"></div>
-
-  <h2 style="margin-top:22px">番茄钟</h2>
-  <div id="clock" style="font-size:44px;font-variant-numeric:tabular-nums;text-align:center;margin:6px 0">25:00</div>
-  <div id="clockinfo" style="text-align:center;font-size:13px;opacity:.75;min-height:18px"></div>
-  <div class="row" style="justify-content:center">
-    <label style="margin:0;display:flex;align-items:center;gap:4px">时长
-      <input id="minutes" type="number" min="0.1" step="any" value="25" style="width:70px">分钟</label>
-    <button id="tstart">开始</button>
-    <button id="tpause">暂停</button>
-    <button id="tend">提前结束</button>
-    <button id="tretry" style="display:none">重试写入</button>
-    <button id="tdiscard" style="display:none">放弃记录</button>
-    <button id="tmini">迷你窗口</button>
-    <button id="tclear">清除</button>
-  </div>
-  <div class="row" style="justify-content:center;margin-top:6px">
-    <label style="margin:0;display:flex;align-items:center;gap:4px">休息 短
-      <input id="bshort" type="number" min="0.1" step="any" value="5" style="width:55px">长
-      <input id="blong" type="number" min="0.1" step="any" value="15" style="width:55px">分钟</label>
-    <button id="tshort">开始短休息</button>
-    <button id="tlong">开始长休息</button>
-  </div>
 <script src="common.js"></script>
 <script>
 const { invoke } = window.__TAURI__.core;
 const $ = (id) => document.getElementById(id);
-const readConfig = () => ({ kernel_path: $("kernel_path").value.trim(), workspace: $("workspace").value.trim(), port: Number($("port").value) });
-const say = (text, ok = true) => { $("msg").textContent = text; $("msg").className = ok ? "ok" : "bad"; };
+const port = () => Number($("port").value);
+const readConfig = () => ({ kernel_path: $("kernel_path").value.trim(), workspace: $("workspace").value.trim(), port: port() });
 
+let msgTimer = null;
+function say(text, ok = true) {
+  const m = $("msg");
+  clearTimeout(msgTimer);
+  if (!text) { m.style.display = "none"; return; }
+  m.textContent = text; m.className = ok ? "ok" : "bad"; m.style.display = "block";
+  if (ok) msgTimer = setTimeout(() => (m.style.display = "none"), 4000);
+}
+const cmd = async (name, args) => { try { await invoke(name, args); return true; } catch (e) { say(String(e), false); return false; } };
+
+// ---- 页签 ----
+function show(p) {
+  for (const b of document.querySelectorAll("nav button")) b.classList.toggle("on", b.dataset.p === p);
+  for (const s of document.querySelectorAll(".page")) s.classList.toggle("on", s.id === "p-" + p);
+  if (p === "tasks") searchTasks();
+}
+for (const b of document.querySelectorAll("nav button")) b.onclick = () => show(b.dataset.p);
+
+// ---- 内核 ----
+let kernelRunning = false;
 async function refresh() {
   try {
-    const s = await invoke("kernel_status", { port: Number($("port").value) });
+    const s = await invoke("kernel_status", { port: port() });
+    kernelRunning = s.running;
+    $("dot").classList.toggle("on", s.running);
     $("status").textContent = s.running
-      ? `内核运行中（版本 ${s.version}）${s.owned ? "，由本工具启动" : "，不是本工具启动的，本工具不会停止它"}`
+      ? `内核运行中 · ${port()}${s.owned ? "" : "（非本工具启动）"}`
       : "内核未运行";
+    $("kstart").style.display = s.running ? "none" : "";
+    $("kstop").style.display = s.running && s.owned ? "" : "none";
   } catch (e) { $("status").textContent = "状态检测失败：" + e; }
 }
 async function act(name, args, doneMsg) {
@@ -85,38 +212,50 @@ async function act(name, args, doneMsg) {
   catch (e) { say(String(e), false); }
   refresh();
 }
-$("start").onclick = async () => { await invoke("save_config", { config: readConfig() }); act("kernel_start", { config: readConfig() }); };
-$("stop").onclick = () => act("kernel_stop", { port: Number($("port").value) });
-$("ui").onclick = () => act("open_ui", { port: Number($("port").value) }, "已用默认浏览器打开");
+$("kstart").onclick = async () => { await invoke("save_config", { config: readConfig() }); act("kernel_start", { config: readConfig() }); };
+$("kstop").onclick = () => act("kernel_stop", { port: port() });
+$("ui").onclick = () => act("open_ui", { port: port() }, "已用默认浏览器打开");
 ["kernel_path", "workspace", "port"].forEach((id) => ($(id).onchange = () => invoke("save_config", { config: readConfig() })));
 
+// ---- 任务：一律显示全部历史，点一下选中并回到计时页 ----
 let selectedTask = null;
-function pick(task, li) {
-  selectedTask = task;
-  document.querySelectorAll("#tasks li").forEach((x) => (x.style.background = ""));
-  li.style.background = "rgba(80,140,255,.2)";
-  $("selected").textContent = `已选择：${task.title}${task.block_id ? "（已绑定块）" : "（未绑定块）"}${task.doc_path ? `　文档：${task.doc_path}` : ""}`;
+function renderTaskCard() {
+  $("tc-sel").style.display = selectedTask ? "" : "none";
+  $("tc-free").style.display = selectedTask ? "none" : "";
+  $("tc-clear").style.display = selectedTask ? "" : "none";
+  $("tc-pick").textContent = selectedTask ? "换任务" : "选任务";
+  if (selectedTask) {
+    $("tc-name").textContent = selectedTask.title;
+    $("tc-doc").textContent = selectedTask.doc_path ? `📄 ${selectedTask.doc_path}` : selectedTask.block_id ? "已绑定块" : "未绑定块";
+  }
 }
+$("tc-pick").onclick = () => show("tasks");
+$("tc-clear").onclick = () => { selectedTask = null; renderTaskCard(); };
+let searchSeq = 0;
 async function searchTasks() {
-  $("taskinfo").textContent = "搜索中…"; $("tasks").replaceChildren();
+  const seq = ++searchSeq;
+  if (!kernelRunning) { $("taskinfo").textContent = "内核没有运行，先在顶部启动内核"; $("tasks").replaceChildren(); return; }
+  $("taskinfo").textContent = "搜索中…";
   try {
-    const list = await invoke("search_tasks", {
-      port: Number($("port").value), scope: $("scope").value, keyword: $("keyword").value, includeCompleted: $("done").checked,
-    });
-    $("taskinfo").textContent = `共 ${list.length} 条`;
+    const list = await invoke("search_tasks", { port: port(), scope: "all", keyword: $("keyword").value, includeCompleted: $("done").checked });
+    if (seq !== searchSeq) return;
+    $("taskinfo").textContent = `共 ${list.length} 条，点一下选择`;
+    const box = $("tasks"); box.replaceChildren();
     for (const t of list) {
-      const li = document.createElement("li");
-      li.style.cssText = "padding:5px 6px;cursor:pointer;border-bottom:1px solid rgba(128,128,128,.2);font-size:13px";
-      li.textContent = `${t.completed ? "✔ " : ""}${t.title}　${t.date || "无日期"}${t.block_id ? "" : "　[无块]"}${t.doc_path ? `　📄 ${t.doc_path}` : ""}`;
-      if (t.doc_path) li.title = t.doc_path;
-      if (t.completed) li.style.opacity = ".6";
-      li.onclick = () => pick(t, li);
-      $("tasks").appendChild(li);
+      const el = document.createElement("div");
+      el.className = "card task" + (t.completed ? " done" : "") + (selectedTask && selectedTask.id === t.id ? " sel" : "");
+      const name = document.createElement("div"); name.className = "name"; name.textContent = t.title || "（无标题）";
+      const meta = document.createElement("div"); meta.className = "meta";
+      meta.textContent = [t.date || "无日期", t.doc_path ? `📄 ${t.doc_path}` : t.block_id ? "已绑定块" : "未绑定块"].join(" · ");
+      el.append(name, meta);
+      el.onclick = () => { selectedTask = t; renderTaskCard(); show("timer"); };
+      box.appendChild(el);
     }
-  } catch (e) { $("taskinfo").textContent = ""; say(String(e), false); }
+  } catch (e) { if (seq === searchSeq) { $("taskinfo").textContent = ""; say(String(e), false); } }
 }
-$("search").onclick = searchTasks;
-$("keyword").onkeydown = (e) => { if (e.key === "Enter") searchTasks(); };
+let kwTimer = null;
+$("keyword").oninput = () => { clearTimeout(kwTimer); kwTimer = setTimeout(searchTasks, 300); };
+$("done").onchange = searchTasks;
 
 // ---- 番茄钟：计时和状态都在后端，这里只是视图（迷你窗口读同一份状态） ----
 let timerState = null;
@@ -124,56 +263,73 @@ async function loadTimer() {
   try { timerState = await invoke("timer_get"); } catch (e) { say(String(e), false); }
   renderClock();
 }
+function plannedMs() { return Number($("minutes").value) * 60000; }
 function renderClock() {
   const s = timerState;
-  const remaining = s ? TimerView.remaining(s) : Number($("minutes").value) * 60000;
+  const f = TimerView.flags(s);
+  const total = s ? s.planned_ms : plannedMs();
+  const remaining = s ? TimerView.remaining(s) : plannedMs();
+  const p = s ? (s.status === "finished" ? (s.completed || s.kind !== "work" ? 1 : total ? TimerView.elapsed(s) / total : 0) : Math.min(1, Math.max(0, TimerView.elapsed(s) / total))) : 0;
+  $("ring").style.setProperty("--deg", `${p * 360}deg`);
   $("clock").textContent = TimerView.fmt(remaining);
   document.title = s && s.status !== "finished" ? `${TimerView.fmt(remaining)} 思源番茄钟` : "思源番茄钟";
-  $("clockinfo").textContent = TimerView.info(s);
-  const f = TimerView.flags(s);
-  $("tstart").disabled = !f.canStart;
-  $("tpause").disabled = !f.canPause; $("tpause").textContent = f.pauseLabel;
-  $("tend").disabled = !f.canEnd;
-  $("tclear").disabled = !f.canClear; // 记录没写成功前不允许清除，避免丢记录
+  const brk = s && s.kind && s.kind !== "work";
+  $("phase").textContent = !s ? "准备开始" : s.status === "finished" ? (brk ? "休息结束" : s.completed ? "已完成" : "已提前结束") : s.status === "paused" ? "已暂停" : brk ? (s.kind === "longBreak" ? "长休息中" : "短休息中") : "专注中";
+
+  $("g-pre").classList.toggle("on", !s);
+  $("g-run").classList.toggle("on", !!s && s.status !== "finished");
+  $("g-post").classList.toggle("on", !!s && s.status === "finished");
+  $("runinfo").textContent = s ? s.task.title : "";
+  $("tpause").textContent = f.pauseLabel;
+  $("postinfo").textContent = TimerView.info(s);
+  $("breakbtns").style.display = f.canBreak ? "" : "none";
   $("tretry").style.display = f.canRetry ? "" : "none";
   $("tdiscard").style.display = f.canDiscard ? "" : "none";
-  $("minutes").disabled = !!s;
-  $("tshort").disabled = $("tlong").disabled = !f.canBreak;
+  $("tclear").disabled = !f.canClear; // 记录没写成功前不允许清除，避免丢记录
 }
-for (const [id, key, def] of [["bshort", "breakShort", 5], ["blong", "breakLong", 15]]) {
-  $(id).value = TimerView.breakMinutes(key === "breakLong") || def;
+for (const b of document.querySelectorAll(".chip")) b.onclick = () => { $("minutes").value = b.dataset.m; syncChips(); renderClock(); };
+function syncChips() { for (const b of document.querySelectorAll(".chip")) b.classList.toggle("on", Number(b.dataset.m) === Number($("minutes").value)); }
+$("minutes").oninput = () => { syncChips(); renderClock(); };
+
+$("tstart").onclick = async () => {
+  const minutes = Number($("minutes").value);
+  if (!(minutes > 0)) return say("时长必须大于 0", false);
+  if (!kernelRunning && !confirm("内核没有运行，计时结束后记录会先写不进去（内核启动后会自动补写）。仍然开始吗？")) return;
+  say("");
+  const task = selectedTask
+    ? { id: selectedTask.id, title: selectedTask.title, block_id: selectedTask.block_id }
+    : { id: "", title: $("freetitle").value.trim(), block_id: null };
+  await cmd("timer_start", { task, minutes, port: port() });
+};
+$("tpause").onclick = () => cmd("timer_toggle_pause");
+$("tend").onclick = () => cmd("timer_end");
+$("tretry").onclick = () => cmd("timer_retry", { port: port() });
+$("tclear").onclick = () => cmd("timer_clear"); // 任务选择保留，方便接着做同一个任务
+$("tdiscard").onclick = () => { if (confirm("放弃后这次计时不会写入番茄记录，确定吗？")) cmd("timer_discard"); };
+$("tmini").onclick = () => cmd("open_mini");
+
+// 休息时长，迷你窗口读同一份（同源 localStorage）
+for (const [id, key, long] of [["bshort", "breakShort", false], ["blong", "breakLong", true]]) {
+  $(id).value = TimerView.breakMinutes(long);
   $(id).oninput = () => { try { localStorage.setItem(key, $(id).value); } catch {} };
 }
 const startBreak = (long) => {
   const minutes = Number($(long ? "blong" : "bshort").value);
-  if (!(minutes > 0)) return say("休息时长必须大于 0", false);
+  if (!(minutes > 0)) return say("休息时长必须大于 0，请到设置页修改", false);
   say("");
-  cmd("timer_start_break", { minutes, long, port: Number($("port").value) });
+  cmd("timer_start_break", { minutes, long, port: port() });
 };
 $("tshort").onclick = () => startBreak(false);
 $("tlong").onclick = () => startBreak(true);
-const cmd = async (name, args) => { try { await invoke(name, args); } catch (e) { say(String(e), false); } };
-$("tstart").onclick = () => {
-  const minutes = Number($("minutes").value);
-  if (!selectedTask) return say("请先在上面的任务列表里选择一个任务", false);
-  if (!(minutes > 0)) return say("时长必须大于 0", false);
-  say("");
-  cmd("timer_start", { task: { id: selectedTask.id, title: selectedTask.title, block_id: selectedTask.block_id }, minutes, port: Number($("port").value) });
-};
-$("tpause").onclick = () => cmd("timer_toggle_pause");
-$("tend").onclick = () => cmd("timer_end");
-$("tretry").onclick = () => cmd("timer_retry", { port: Number($("port").value) });
-$("tclear").onclick = () => cmd("timer_clear");
-$("tdiscard").onclick = () => { if (confirm("放弃后这次计时不会写入番茄记录，确定吗？")) cmd("timer_discard"); };
-$("tmini").onclick = () => cmd("open_mini");
-$("minutes").oninput = () => { if (!timerState) renderClock(); };
+
 window.__TAURI__.event.listen("timer-changed", loadTimer);
 setInterval(renderClock, 250);
 
 (async () => {
   const c = await invoke("get_config");
   $("kernel_path").value = c.kernel_path; $("workspace").value = c.workspace; $("port").value = c.port;
-  refresh(); setInterval(refresh, 3000);
+  renderTaskCard();
+  await refresh(); setInterval(refresh, 3000);
   await loadTimer();
   const s = timerState;
   if (s && s.recovered) {

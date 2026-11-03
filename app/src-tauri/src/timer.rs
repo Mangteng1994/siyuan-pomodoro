@@ -243,10 +243,20 @@ pub fn timer_start(
     if g.is_some() {
         return Err("已经有一个计时，请先结束并清除".to_string());
     }
+    let started_at = now_ms();
+    // 自由专注：没选任务时用合成的事件 ID，记录照常写进统计，只是不挂任何任务或块
+    let mut task = task;
+    if task.id.trim().is_empty() {
+        task.id = format!("free_{started_at}");
+        task.block_id = None;
+        if task.title.trim().is_empty() {
+            task.title = "番茄专注".to_string();
+        }
+    }
     let s = TimerState {
         task,
         planned_ms: (minutes * 60000.0).round() as i64,
-        started_at: now_ms(),
+        started_at,
         paused_total: 0,
         paused_at: None,
         status: Status::Running,
