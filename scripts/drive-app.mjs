@@ -9,7 +9,7 @@ const expr = `(async()=>{${prelude} return ${process.argv[3]}})()`;
 const targets = await (await fetch('http://127.0.0.1:9222/json')).json();
 // 环境变量 TARGET=mini 选迷你窗口，默认选主窗口
 const want = process.env.TARGET;
-const page = targets.find((t) => t.type === 'page' && (want ? t.url.includes(want) : !t.url.includes('mini.html')));
+const page = targets.find((t) => t.type === 'page' && (want ? t.url.includes(want) : !/mini\.html|notes\.html/.test(t.url)));
 if (!page) throw new Error('没有找到页面');
 const ws = new WebSocket(page.webSocketDebuggerUrl);
 await new Promise((r) => (ws.onopen = r));

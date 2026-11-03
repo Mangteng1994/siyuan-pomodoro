@@ -10,7 +10,9 @@
   button { cursor: pointer; font: inherit; }
 
   /* 普通模式：和之前一样的小窗，带按钮 */
-  #normal { padding: 8px 10px; }
+  #normal { padding: 8px 10px; height: 100%; display: flex; flex-direction: column; }
+  #notebox { flex: 1; min-height: 0; flex-direction: column; }
+  #notebox textarea { flex: 1; min-height: 40px; resize: vertical; }
   #clock { font-size: 40px; line-height: 1.1; text-align: center; font-variant-numeric: tabular-nums; }
   #info { font-size: 12px; text-align: center; opacity: .8; margin: 2px 0 6px; min-height: 30px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
   .row { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
@@ -61,6 +63,10 @@
   <div id="normal">
     <div id="clock">--:--</div>
     <div id="info"></div>
+    <div id="notebox" style="display:none;margin-bottom:6px">
+      <textarea id="notetext" rows="2" placeholder="这个番茄做了什么？（可留空，拖右下角或拉大窗口可以放大）" style="width:100%;box-sizing:border-box;font:inherit;font-size:12px"></textarea>
+      <div class="row" style="margin-top:4px"><button id="noteins" title="把悬浮笔记里已勾选的事项放进来">插入完成事项</button><button id="notesave">保存备注</button><button id="noteskip">跳过</button></div>
+    </div>
     <div class="row">
       <button id="tpause">暂停</button>
       <button id="tend">结束</button>
@@ -140,6 +146,10 @@ function render() {
   const f = TimerView.flags(st);
   $("tpause").style.display = $("tend").style.display = f.canPause ? "" : "none";
   $("tpause").textContent = f.pauseLabel;
+  $("notebox").style.display = f.awaitingNote ? "flex" : "none";
+  $("info").style.display = f.awaitingNote ? "none" : "";
+  if (f.awaitingNote && !noteShown) setTimeout(() => $("notetext").focus(), 0);
+  noteShown = f.awaitingNote;
   $("tshort").style.display = $("tlong").style.display = f.canBreak ? "" : "none";
   $("tretry").style.display = f.canRetry ? "" : "none";
   $("tdiscard").style.display = f.canDiscard ? "" : "none";
@@ -159,6 +169,11 @@ function render() {
 const cmd = async (name, args) => { try { await invoke(name, args); } catch (e) { $("info").textContent = String(e); } };
 $("tpause").onclick = () => cmd("timer_toggle_pause");
 $("tend").onclick = () => cmd("timer_end");
+let noteShown = false;
+const submitNote = async (note) => { try { await invoke("timer_submit_note", { note }); $("notetext").value = ""; } catch (e) { $("info").style.display = ""; $("info").textContent = String(e); } };
+$("noteins").onclick = () => TimerView.insertDoneNotes($("notetext"), invoke);
+$("notesave").onclick = () => submitNote($("notetext").value);
+$("noteskip").onclick = () => submitNote("");
 $("tshort").onclick = () => cmd("timer_start_break", { minutes: TimerView.breakMinutes(false), long: false, port: st.port });
 $("tlong").onclick = () => cmd("timer_start_break", { minutes: TimerView.breakMinutes(true), long: true, port: st.port });
 $("tretry").onclick = () => cmd("timer_retry", { port: st.port });

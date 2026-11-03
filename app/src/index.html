@@ -105,6 +105,10 @@
           <button class="ghost" id="tc-pick">选任务</button>
           <button class="ghost" id="tc-clear" style="display:none" title="取消选择，改为自由专注">✕</button>
         </div>
+        <div id="recentbox" style="display:none;margin:-4px 0 12px">
+          <div style="font-size:12px;color:var(--sub);margin-bottom:4px">最近用过</div>
+          <div id="recent" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+        </div>
         <div class="chips" id="chips">
           <button class="chip" data-m="15">15</button>
           <button class="chip on" data-m="25">25</button>
@@ -120,12 +124,15 @@
         <div class="btns">
           <button id="tpause">暂停</button>
           <button id="tend">提前结束</button>
-          <button id="tmini">迷你窗口</button>
         </div>
       </div>
 
       <div class="grp" id="g-post">
         <div id="postinfo" style="text-align:center;font-size:13px;color:var(--sub);margin-bottom:12px"></div>
+        <div id="notebox" style="display:none;margin-bottom:12px">
+          <textarea id="notetext" rows="4" placeholder="这个番茄做了什么？（可留空，拖右下角可以放大）" style="width:100%;font:inherit;color:var(--fg);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 10px;resize:vertical;min-height:72px"></textarea>
+          <div class="btns" style="margin-top:8px"><button id="noteins" title="把悬浮笔记里已勾选的事项放进来">插入完成事项</button><button class="primary" id="notesave">保存备注</button><button id="noteskip">跳过</button></div>
+        </div>
         <div class="btns" id="breakbtns" style="margin-bottom:8px">
           <button id="tshort">短休息</button>
           <button id="tlong">长休息</button>
@@ -135,6 +142,11 @@
           <button id="tdiscard" style="display:none">放弃记录</button>
           <button class="primary" id="tclear">完成</button>
         </div>
+      </div>
+
+      <div class="btns" style="margin-top:18px">
+        <button class="ghost" id="tmini">迷你窗口</button>
+        <button class="ghost" id="tnotes" title="悬浮在桌面上的待办小笔记，番茄期间随手记做了什么">悬浮笔记</button>
       </div>
     </section>
 
@@ -152,6 +164,8 @@
       <div class="f"><label>内核程序路径</label><input id="kernel_path" type="text"></div>
       <div class="f"><label>工作空间</label><input id="workspace" type="text" placeholder="例如 C:\SiYuanData"></div>
       <div class="f"><label>端口</label><input id="port" type="number" min="1" max="65535" style="width:120px"></div>
+      <h3>启动</h3>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--fg);margin:0"><input id="autostart" type="checkbox" style="width:auto">开机自动启动（只进托盘，不弹窗口）</label>
       <h3>休息时长（分钟）</h3>
       <div class="inl">
         <div><label style="font-size:12px;color:var(--sub)">短休息</label><input id="bshort" type="number" min="0.1" step="any"></div>
@@ -263,6 +277,11 @@ async function loadTimer() {
   try { timerState = await invoke("timer_get"); } catch (e) { say(String(e), false); }
   renderClock();
 }
+let noteShown = false;
+const submitNote = async (note) => { if (await cmd("timer_submit_note", { note })) $("notetext").value = ""; };
+$("noteins").onclick = () => TimerView.insertDoneNotes($("notetext"), invoke);
+$("notesave").onclick = () => submitNote($("notetext").value);
+$("noteskip").onclick = () => submitNote("");
 function plannedMs() { return Number($("minutes").value) * 60000; }
 function renderClock() {
   const s = timerState;
@@ -282,6 +301,9 @@ function renderClock() {
   $("runinfo").textContent = s ? s.task.title : "";
   $("tpause").textContent = f.pauseLabel;
   $("postinfo").textContent = TimerView.info(s);
+  $("notebox").style.display = f.awaitingNote ? "" : "none";
+  if (f.awaitingNote && !noteShown) setTimeout(() => $("notetext").focus(), 0);
+  noteShown = f.awaitingNote;
   $("breakbtns").style.display = f.canBreak ? "" : "none";
   $("tretry").style.display = f.canRetry ? "" : "none";
   $("tdiscard").style.display = f.canDiscard ? "" : "none";
@@ -299,7 +321,7 @@ $("tstart").onclick = async () => {
   const task = selectedTask
     ? { id: selectedTask.id, title: selectedTask.title, block_id: selectedTask.block_id }
     : { id: "", title: $("freetitle").value.trim(), block_id: null };
-  await cmd("timer_start", { task, minutes, port: port() });
+  if (await cmd("timer_start", { task, minutes, port: port() }) && selectedTask) pushRecent(selectedTask);
 };
 $("tpause").onclick = () => cmd("timer_toggle_pause");
 $("tend").onclick = () => cmd("timer_end");
@@ -307,6 +329,36 @@ $("tretry").onclick = () => cmd("timer_retry", { port: port() });
 $("tclear").onclick = () => cmd("timer_clear"); // 任务选择保留，方便接着做同一个任务
 $("tdiscard").onclick = () => { if (confirm("放弃后这次计时不会写入番茄记录，确定吗？")) cmd("timer_discard"); };
 $("tmini").onclick = () => cmd("open_mini");
+$("tnotes").onclick = () => cmd("open_notes");
+
+// ---- 最近用过的任务（C2）：只存在本机，选任务开始计时时记一笔 ----
+const RECENT_MAX = 6;
+const loadRecent = () => { try { return JSON.parse(localStorage.getItem("recentTasks") || "[]"); } catch { return []; } };
+function pushRecent(t) {
+  const list = [{ id: t.id, title: t.title, block_id: t.block_id || null, doc_path: t.doc_path || null }, ...loadRecent().filter((x) => x.id !== t.id)].slice(0, RECENT_MAX);
+  try { localStorage.setItem("recentTasks", JSON.stringify(list)); } catch {}
+  renderRecent();
+}
+function renderRecent() {
+  const list = loadRecent();
+  $("recentbox").style.display = list.length ? "" : "none";
+  const box = $("recent"); box.replaceChildren();
+  for (const t of list) {
+    const b = document.createElement("button");
+    b.className = "chip" + (selectedTask && selectedTask.id === t.id ? " on" : "");
+    b.textContent = t.title.length > 14 ? t.title.slice(0, 14) + "…" : t.title;
+    b.title = t.title + (t.doc_path ? `（${t.doc_path}）` : "");
+    b.onclick = () => { selectedTask = t; renderTaskCard(); renderRecent(); };
+    box.appendChild(b);
+  }
+}
+
+// ---- 开机自启（C3） ----
+$("autostart").onchange = async () => {
+  const want = $("autostart").checked;
+  if (!(await cmd("autostart_set", { enabled: want }))) $("autostart").checked = !want;
+  else say(want ? "已设置开机自启" : "已取消开机自启");
+};
 
 // 休息时长，迷你窗口读同一份（同源 localStorage）
 for (const [id, key, long] of [["bshort", "breakShort", false], ["blong", "breakLong", true]]) {
@@ -328,7 +380,8 @@ setInterval(renderClock, 250);
 (async () => {
   const c = await invoke("get_config");
   $("kernel_path").value = c.kernel_path; $("workspace").value = c.workspace; $("port").value = c.port;
-  renderTaskCard();
+  renderTaskCard(); renderRecent();
+  try { $("autostart").checked = await invoke("autostart_get"); } catch {}
   await refresh(); setInterval(refresh, 3000);
   await loadTimer();
   const s = timerState;

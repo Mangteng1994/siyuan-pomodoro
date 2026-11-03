@@ -255,6 +255,7 @@ pub fn record_focus(
     planned_min: f64,
     completed: bool,
     kind: &str, // work | shortBreak | longBreak
+    note: &str,
 ) -> Result<Value, String> {
     if task_id.trim().is_empty() {
         return Err("缺少任务 ID".to_string());
@@ -296,6 +297,7 @@ pub fn record_focus(
             "duration": duration,
             "plannedDuration": planned,
             "completed": completed,
+            "note": note,
         }),
     )?;
     Ok(v["data"].clone())

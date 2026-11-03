@@ -256,7 +256,40 @@ async fn search_tasks(
     .map_err(|e| e.to_string())?
 }
 
+mod notes;
 mod timer;
+
+const RUN_KEY: &str = r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run";
+const RUN_NAME: &str = "SiYuanPomodoro";
+
+/// 开机自启：写当前用户的 Run 注册表项（只影响当前用户，可随时关掉）。启动时带 --hidden，只进托盘不弹主窗口。
+#[tauri::command]
+fn autostart_get() -> bool {
+    let mut cmd = Command::new("reg");
+    no_window(&mut cmd).args(["query", RUN_KEY, "/v", RUN_NAME]);
+    cmd.output().map(|o| o.status.success()).unwrap_or(false)
+}
+
+#[tauri::command]
+fn autostart_set(enabled: bool) -> Result<(), String> {
+    let mut cmd = Command::new("reg");
+    if enabled {
+        let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+        let value = format!("\"{}\" --hidden", exe.display());
+        no_window(&mut cmd).args(["add", RUN_KEY, "/v", RUN_NAME, "/t", "REG_SZ", "/d", &value, "/f"]);
+    } else {
+        if !autostart_get() {
+            return Ok(());
+        }
+        no_window(&mut cmd).args(["delete", RUN_KEY, "/v", RUN_NAME, "/f"]);
+    }
+    let out = cmd.output().map_err(|e| e.to_string())?;
+    if out.status.success() {
+        Ok(())
+    } else {
+        Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
+    }
+}
 
 fn show_main(app: &tauri::AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
@@ -272,8 +305,9 @@ fn init_tray(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
     let open_main = MenuItem::with_id(app, "main", "打开主窗口", true, None::<&str>)?;
     let open_mini = MenuItem::with_id(app, "mini", "打开迷你窗口", true, None::<&str>)?;
+    let open_notes = MenuItem::with_id(app, "notes", "打开悬浮笔记", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "退出（计时靠记录文件，下次启动恢复）", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&open_main, &open_mini, &quit])?;
+    let menu = Menu::with_items(app, &[&open_main, &open_mini, &open_notes, &quit])?;
     let mut builder = TrayIconBuilder::new()
         .tooltip("思源番茄钟")
         .menu(&menu)
@@ -282,6 +316,9 @@ fn init_tray(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             "main" => show_main(app),
             "mini" => {
                 let _ = timer::show_mini(app);
+            }
+            "notes" => {
+                let _ = notes::show_notes(app);
             }
             "quit" => app.exit(0),
             _ => {}
@@ -303,6 +340,12 @@ fn main() {
         .setup(|app| {
             timer::init(app)?;
             init_tray(app)?;
+            // 开机自启时带 --hidden：只进托盘，不弹主窗口
+            if std::env::args().any(|a| a == "--hidden") {
+                if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.hide();
+                }
+            }
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -324,9 +367,15 @@ fn main() {
             timer::timer_start_break,
             timer::timer_toggle_pause,
             timer::timer_end,
+            timer::timer_submit_note,
             timer::timer_retry,
             timer::timer_clear,
             timer::timer_discard,
+            autostart_get,
+            autostart_set,
+            notes::notes_get,
+            notes::notes_save,
+            notes::open_notes,
             timer::open_mini,
             timer::set_mini_mode
         ])

@@ -44,6 +44,13 @@ pub struct TimerState {
     /// work（番茄）| shortBreak | longBreak（休息）。旧的 timer.json 没有这一项，按番茄处理
     #[serde(default = "default_kind")]
     pub kind: String,
+    /// 专注结束后等用户填备注：等到填完、点跳过或超时，才写记录
+    #[serde(default)]
+    pub awaiting_note: bool,
+    #[serde(default)]
+    pub note_deadline: i64,
+    #[serde(default)]
+    pub note: String,
     /// 写记录用的内核端口
     pub port: u16,
     /// 以下两项只在内存里，不落盘
@@ -62,6 +69,9 @@ fn default_kind() -> String {
 
 /// 记录写入失败后的自动重试间隔
 const RETRY_INTERVAL: Duration = Duration::from_secs(30);
+
+/// 专注结束后等用户填备注的时间，超时按空备注写入，不会卡住记录
+const NOTE_WAIT_MS: i64 = 120_000;
 
 pub type Shared = Arc<Mutex<Option<TimerState>>>;
 
@@ -113,7 +123,7 @@ fn spawn_write(app: AppHandle, shared: Shared) {
         let snap = {
             let mut g = shared.lock().unwrap();
             match g.as_mut() {
-                Some(s) if s.status == Status::Finished && !s.written && !s.writing => {
+                Some(s) if s.status == Status::Finished && !s.written && !s.writing && !s.awaiting_note => {
                     s.writing = true;
                     s.error = None;
                     s.clone()
@@ -132,6 +142,7 @@ fn spawn_write(app: AppHandle, shared: Shared) {
             snap.planned_ms as f64 / 60000.0,
             snap.completed,
             &snap.kind,
+            &snap.note,
         );
         {
             let mut g = shared.lock().unwrap();
@@ -197,6 +208,22 @@ pub fn init(app: &mut tauri::App) -> Result<(), String> {
             last_try = std::time::Instant::now();
             spawn_write(handle.clone(), shared.clone());
         }
+        // 等备注超时：按当前备注（可能是空）写入
+        let note_timeout = {
+            let mut g = shared.lock().unwrap();
+            match g.as_mut() {
+                Some(s) if s.status == Status::Finished && s.awaiting_note && now_ms() >= s.note_deadline => {
+                    s.awaiting_note = false;
+                    let _ = persist(&handle, s);
+                    true
+                }
+                _ => false,
+            }
+        };
+        if note_timeout {
+            notify(&handle);
+            spawn_write(handle.clone(), shared.clone());
+        }
         let finished = {
             let mut g = shared.lock().unwrap();
             match g.as_mut() {
@@ -206,6 +233,11 @@ pub fn init(app: &mut tauri::App) -> Result<(), String> {
                     s.actual_ms = s.planned_ms;
                     s.completed = true;
                     s.ended_at = s.started_at + s.paused_total + s.planned_ms;
+                    // 只有专注结束才问备注，休息不问
+                    if s.kind == "work" {
+                        s.awaiting_note = true;
+                        s.note_deadline = now_ms() + NOTE_WAIT_MS;
+                    }
                     let _ = persist(&handle, s);
                     true
                 }
@@ -267,6 +299,9 @@ pub fn timer_start(
         session_id: None,
         duration: None,
         kind: default_kind(),
+        awaiting_note: false,
+        note_deadline: 0,
+        note: String::new(),
         port,
         writing: false,
         error: None,
@@ -311,6 +346,9 @@ pub fn timer_start_break(
         session_id: None,
         duration: None,
         kind: if long { "longBreak" } else { "shortBreak" }.to_string(),
+        awaiting_note: false,
+        note_deadline: 0,
+        note: String::new(),
         port,
         writing: false,
         error: None,
@@ -368,6 +406,25 @@ pub fn timer_end(app: AppHandle, state: State<TimerHandle>) -> Result<(), String
         s.completed = false;
         s.paused_at = None;
         s.status = Status::Finished;
+        s.awaiting_note = true;
+        s.note_deadline = now + NOTE_WAIT_MS;
+        persist(&app, s)?;
+    }
+    notify(&app);
+    Ok(())
+}
+
+/// 提交备注并写入记录；传空字符串就是“跳过”。
+#[tauri::command]
+pub fn timer_submit_note(app: AppHandle, state: State<TimerHandle>, note: String) -> Result<(), String> {
+    {
+        let mut g = state.0.lock().unwrap();
+        let s = g.as_mut().ok_or("没有计时")?;
+        if s.status != Status::Finished || s.written {
+            return Err("没有需要备注的记录".to_string());
+        }
+        s.note = note.trim().to_string();
+        s.awaiting_note = false;
         persist(&app, s)?;
     }
     notify(&app);
@@ -460,8 +517,10 @@ pub fn set_mini_mode(app: AppHandle, mode: String) -> Result<(), String> {
         "ring" => (64.0, 64.0, false),
         "bar" => (190.0, 46.0, false),
         "minimal" => (150.0, 22.0, false),
-        _ => (250.0, 160.0, true),
+        _ => (250.0, 200.0, true),
     };
+    // 普通模式可以拖边缘改大（备注输入框随之变大），紧凑样式尺寸固定
+    w.set_resizable(decorations).map_err(|e| e.to_string())?;
     w.set_decorations(decorations).map_err(|e| e.to_string())?;
     // 无边框时不要系统阴影/边框，否则圆环外面会露出一个方框
     w.set_shadow(decorations).map_err(|e| e.to_string())?;
@@ -477,8 +536,9 @@ pub fn show_mini(app: &AppHandle) -> Result<(), String> {
     }
     tauri::WebviewWindowBuilder::new(app, "mini", tauri::WebviewUrl::App("mini.html".into()))
         .title("番茄钟")
-        .inner_size(250.0, 160.0)
-        .resizable(false)
+        .inner_size(250.0, 200.0)
+        .min_inner_size(230.0, 170.0)
+        .resizable(true)
         .always_on_top(true)
         .build()
         .map(|_| ())
