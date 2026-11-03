@@ -88,7 +88,7 @@ function pick(task, li) {
   selectedTask = task;
   document.querySelectorAll("#tasks li").forEach((x) => (x.style.background = ""));
   li.style.background = "rgba(80,140,255,.2)";
-  $("selected").textContent = `已选择：${task.title}${task.block_id ? "（已绑定块）" : "（未绑定块）"}`;
+  $("selected").textContent = `已选择：${task.title}${task.block_id ? "（已绑定块）" : "（未绑定块）"}${task.doc_path ? `　文档：${task.doc_path}` : ""}`;
 }
 async function searchTasks() {
   $("taskinfo").textContent = "搜索中…"; $("tasks").replaceChildren();
@@ -100,7 +100,8 @@ async function searchTasks() {
     for (const t of list) {
       const li = document.createElement("li");
       li.style.cssText = "padding:5px 6px;cursor:pointer;border-bottom:1px solid rgba(128,128,128,.2);font-size:13px";
-      li.textContent = `${t.completed ? "✔ " : ""}${t.title}　${t.date || "无日期"}${t.block_id ? "" : "　[无块]"}`;
+      li.textContent = `${t.completed ? "✔ " : ""}${t.title}　${t.date || "无日期"}${t.block_id ? "" : "　[无块]"}${t.doc_path ? `　📄 ${t.doc_path}` : ""}`;
+      if (t.doc_path) li.title = t.doc_path;
       if (t.completed) li.style.opacity = ".6";
       li.onclick = () => pick(t, li);
       $("tasks").appendChild(li);

@@ -131,6 +131,30 @@ pub struct TaskItem {
     pub completed: bool,
     pub block_id: Option<String>,
     pub doc_id: Option<String>,
+    /// 任务所在文档的路径（不含笔记本名），查不到时为 None
+    pub doc_path: Option<String>,
+}
+
+/// 用内核接口把文档 ID 换成文档路径；同一次搜索里每个文档只查一次，查不到的静默跳过。
+fn fill_doc_paths(port: u16, items: &mut [TaskItem]) {
+    let agent = ureq::AgentBuilder::new().timeout(std::time::Duration::from_millis(1500)).build();
+    let mut cache: std::collections::HashMap<String, Option<String>> = std::collections::HashMap::new();
+    for t in items.iter_mut() {
+        let Some(id) = t.doc_id.clone() else { continue };
+        let path = cache
+            .entry(id.clone())
+            .or_insert_with(|| {
+                let resp = agent
+                    .post(&format!("http://127.0.0.1:{port}/api/filetree/getHPathByID"))
+                    .set("Content-Type", "application/json")
+                    .send_string(&json!({"id": id}).to_string())
+                    .ok()?;
+                let v: Value = serde_json::from_str(&resp.into_string().ok()?).ok()?;
+                v["data"].as_str().map(|p| p.trim_start_matches('/').to_string()).filter(|p| !p.is_empty())
+            })
+            .clone();
+        t.doc_path = path;
+    }
 }
 
 fn s(v: &Value, k: &str) -> Option<String> {
@@ -166,6 +190,7 @@ pub fn search_tasks(port: u16, scope: &str, keyword: &str, include_completed: bo
                 completed: t["completed"].as_bool().unwrap_or(false),
                 block_id: s(t, "blockId"),
                 doc_id: s(t, "docId"),
+                doc_path: None,
             })
         })
         .collect();
@@ -180,6 +205,7 @@ pub fn search_tasks(port: u16, scope: &str, keyword: &str, include_completed: bo
         (false, true) => std::cmp::Ordering::Less,
         _ => b.date.cmp(&a.date),
     });
+    fill_doc_paths(port, &mut items);
     Ok(items)
 }
 
