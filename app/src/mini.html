@@ -178,7 +178,17 @@ $("tshort").onclick = () => cmd("timer_start_break", { minutes: TimerView.breakM
 $("tlong").onclick = () => cmd("timer_start_break", { minutes: TimerView.breakMinutes(true), long: true, port: st.port });
 $("tretry").onclick = () => cmd("timer_retry", { port: st.port });
 $("tclear").onclick = () => cmd("timer_clear");
-$("tdiscard").onclick = () => { if (confirm("放弃后这次计时不会写入番茄记录，确定吗？")) cmd("timer_discard"); };
+// 小窗口里系统自带的确认框会被截断，所以改成就地二次确认：第一次点变成“确定放弃？”，4 秒内再点才放弃
+let discardArm = null;
+$("tdiscard").onclick = () => {
+  if (!discardArm) {
+    $("tdiscard").textContent = "确定放弃？";
+    discardArm = setTimeout(() => { discardArm = null; $("tdiscard").textContent = "放弃"; }, 4000);
+    return;
+  }
+  clearTimeout(discardArm); discardArm = null; $("tdiscard").textContent = "放弃";
+  cmd("timer_discard");
+};
 $("tshrink").onclick = () => setPreferred(STYLES.includes(preferred) ? preferred : "bar");
 
 // 迷你模式里的按钮：暂停/继续、结束、切换样式（圆环→横条→极简→普通→圆环）

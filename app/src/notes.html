@@ -20,6 +20,10 @@
   #list { flex: 1; min-height: 0; overflow-y: auto; padding: 0 8px; }
   .it { display: flex; align-items: flex-start; gap: 6px; padding: 4px 2px; border-bottom: 1px solid var(--line); }
   .it input[type=checkbox] { margin-top: 5px; flex: none; accent-color: var(--accent); }
+  .handle { flex: none; width: 14px; margin-top: 3px; text-align: center; color: var(--sub); cursor: grab; user-select: none; touch-action: none; letter-spacing: -2px; opacity: .55; }
+  .it:hover .handle { opacity: 1; }
+  .it.dragging { background: rgba(229,72,61,.12); }
+  .it.dragging .handle { cursor: grabbing; }
   .it textarea { flex: 1; min-width: 0; font: inherit; color: inherit; background: transparent; border: 0; resize: none; overflow: hidden; padding: 2px 0; line-height: 1.45; }
   .it textarea:focus { outline: none; }
   .it.done textarea { color: var(--sub); text-decoration: line-through; }
@@ -69,7 +73,9 @@ function render(focusId) {
   const box = $("list"); box.replaceChildren();
   if (!items.length) { const e = document.createElement("div"); e.id = "empty"; e.textContent = "还没有事项"; box.appendChild(e); return; }
   for (const it of items) {
-    const row = document.createElement("div"); row.className = "it" + (it.done ? " done" : "");
+    const row = document.createElement("div"); row.className = "it" + (it.done ? " done" : ""); row.dataset.id = it.id;
+    const handle = document.createElement("div"); handle.className = "handle"; handle.textContent = "⋮⋮"; handle.title = "按住拖动调整顺序";
+    handle.addEventListener("pointerdown", (e) => startDrag(e, row, handle));
     const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = it.done;
     cb.onchange = () => { it.done = cb.checked; row.classList.toggle("done", it.done); scheduleSave(); };
     const ta = document.createElement("textarea"); ta.rows = 1; ta.value = it.text;
@@ -77,10 +83,45 @@ function render(focusId) {
     ta.onkeydown = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); ta.blur(); $("newtext").focus(); } };
     const x = document.createElement("button"); x.className = "x"; x.textContent = "✕"; x.title = "删除";
     x.onclick = () => { items = items.filter((i) => i.id !== it.id); render(); scheduleSave(); };
-    row.append(cb, ta, x); box.appendChild(row);
+    row.append(handle, cb, ta, x); box.appendChild(row);
     fit(ta);
     if (focusId === it.id) ta.focus();
   }
+}
+// 按住左边的把手上下拖动调整顺序：拖动时直接在页面上挪这一行，松手后按页面上的顺序重排并落盘
+function startDrag(e, row, handle) {
+  if (e.button !== undefined && e.button !== 0) return;
+  e.preventDefault();
+  try { handle.setPointerCapture(e.pointerId); } catch {}
+  row.classList.add("dragging");
+  const list = $("list");
+  const move = (ev) => {
+    const lr = list.getBoundingClientRect();
+    if (ev.clientY < lr.top + 18) list.scrollTop -= 12;
+    else if (ev.clientY > lr.bottom - 18) list.scrollTop += 12;
+    let before = null;
+    for (const r of list.querySelectorAll(".it")) {
+      if (r === row) continue;
+      const b = r.getBoundingClientRect();
+      if (ev.clientY < b.top + b.height / 2) { before = r; break; }
+    }
+    if (before !== row.nextElementSibling) list.insertBefore(row, before);
+  };
+  // 监听挂在 document 上，这样鼠标松开在窗口哪里都能结束拖动，不会卡在拖动状态
+  const end = () => {
+    document.removeEventListener("pointermove", move);
+    document.removeEventListener("pointerup", end);
+    document.removeEventListener("pointercancel", end);
+    window.removeEventListener("blur", end);
+    row.classList.remove("dragging");
+    const byId = new Map(items.map((i) => [i.id, i]));
+    const order = [...list.querySelectorAll(".it")].map((r) => byId.get(r.dataset.id)).filter(Boolean);
+    if (order.length === items.length && order.some((it, i) => it !== items[i])) { items = order; scheduleSave(); }
+  };
+  document.addEventListener("pointermove", move);
+  document.addEventListener("pointerup", end);
+  document.addEventListener("pointercancel", end);
+  window.addEventListener("blur", end);
 }
 function add() {
   const v = $("newtext").value.trim();
@@ -100,12 +141,24 @@ async function copy(text, what) {
 }
 $("copydone").onclick = () => copy(lines(items.filter((i) => i.done)), "已完成事项");
 $("copyall").onclick = () => copy(items.map((i) => `- [${i.done ? "x" : " "}] ${i.text.replace(/\n+/g, " ")}`).join("\n"), "全部事项");
+// 小窗口里系统自带的确认框会被截断、点不到按钮，所以改成就地二次确认：第一次点变成“确认删除 N 条”，4 秒内再点才删
+let clearArm = null;
 $("cleardone").onclick = () => {
   const n = items.filter((i) => i.done).length;
   if (!n) return flash("没有已完成的事项");
-  if (!confirm(`删除 ${n} 条已完成的事项？`)) return;
+  const b = $("cleardone");
+  if (!clearArm) {
+    b.textContent = `确认删除 ${n} 条`; b.style.borderColor = "var(--accent)"; b.style.color = "var(--accent)";
+    clearArm = setTimeout(disarm, 4000);
+    return;
+  }
+  disarm();
   items = items.filter((i) => !i.done); render(); scheduleSave();
 };
+function disarm() {
+  clearTimeout(clearArm); clearArm = null;
+  const b = $("cleardone"); b.textContent = "清除已完成"; b.style.borderColor = ""; b.style.color = "";
+}
 
 async function load() {
   try { items = await invoke("notes_get"); } catch (e) { items = []; flash(String(e)); }
