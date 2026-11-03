@@ -57,6 +57,13 @@
     <button id="tmini">迷你窗口</button>
     <button id="tclear">清除</button>
   </div>
+  <div class="row" style="justify-content:center;margin-top:6px">
+    <label style="margin:0;display:flex;align-items:center;gap:4px">休息 短
+      <input id="bshort" type="number" min="0.1" step="any" value="5" style="width:55px">长
+      <input id="blong" type="number" min="0.1" step="any" value="15" style="width:55px">分钟</label>
+    <button id="tshort">开始短休息</button>
+    <button id="tlong">开始长休息</button>
+  </div>
 <script src="common.js"></script>
 <script>
 const { invoke } = window.__TAURI__.core;
@@ -131,7 +138,20 @@ function renderClock() {
   $("tretry").style.display = f.canRetry ? "" : "none";
   $("tdiscard").style.display = f.canDiscard ? "" : "none";
   $("minutes").disabled = !!s;
+  $("tshort").disabled = $("tlong").disabled = !f.canBreak;
 }
+for (const [id, key, def] of [["bshort", "breakShort", 5], ["blong", "breakLong", 15]]) {
+  $(id).value = TimerView.breakMinutes(key === "breakLong") || def;
+  $(id).oninput = () => { try { localStorage.setItem(key, $(id).value); } catch {} };
+}
+const startBreak = (long) => {
+  const minutes = Number($(long ? "blong" : "bshort").value);
+  if (!(minutes > 0)) return say("休息时长必须大于 0", false);
+  say("");
+  cmd("timer_start_break", { minutes, long, port: Number($("port").value) });
+};
+$("tshort").onclick = () => startBreak(false);
+$("tlong").onclick = () => startBreak(true);
 const cmd = async (name, args) => { try { await invoke(name, args); } catch (e) { say(String(e), false); } };
 $("tstart").onclick = () => {
   const minutes = Number($("minutes").value);

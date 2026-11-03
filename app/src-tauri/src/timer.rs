@@ -41,6 +41,9 @@ pub struct TimerState {
     pub written: bool,
     pub session_id: Option<String>,
     pub duration: Option<u32>,
+    /// work（番茄）| shortBreak | longBreak（休息）。旧的 timer.json 没有这一项，按番茄处理
+    #[serde(default = "default_kind")]
+    pub kind: String,
     /// 写记录用的内核端口
     pub port: u16,
     /// 以下两项只在内存里，不落盘
@@ -51,6 +54,10 @@ pub struct TimerState {
     /// 是否是程序重启后从文件恢复的（只在内存里，供界面提示）
     #[serde(default)]
     pub recovered: bool,
+}
+
+fn default_kind() -> String {
+    "work".to_string()
 }
 
 /// 记录写入失败后的自动重试间隔
@@ -124,6 +131,7 @@ fn spawn_write(app: AppHandle, shared: Shared) {
             snap.actual_ms,
             snap.planned_ms as f64 / 60000.0,
             snap.completed,
+            &snap.kind,
         );
         {
             let mut g = shared.lock().unwrap();
@@ -248,6 +256,51 @@ pub fn timer_start(
         written: false,
         session_id: None,
         duration: None,
+        kind: default_kind(),
+        port,
+        writing: false,
+        error: None,
+        recovered: false,
+    };
+    persist(&app, &s)?;
+    *g = Some(s);
+    drop(g);
+    notify(&app);
+    Ok(())
+}
+
+/// 番茄记录写入后，接着开始休息倒计时（短休息或长休息），休息记在同一个任务名下。
+#[tauri::command]
+pub fn timer_start_break(
+    app: AppHandle,
+    state: State<TimerHandle>,
+    minutes: f64,
+    long: bool,
+    port: u16,
+) -> Result<(), String> {
+    if !(minutes > 0.0) {
+        return Err("时长必须大于 0".to_string());
+    }
+    let mut g = state.0.lock().unwrap();
+    let prev = match g.as_ref() {
+        Some(s) if s.status == Status::Finished && s.written && s.kind == "work" => s.clone(),
+        Some(_) => return Err("要等番茄计时结束并写入记录后才能开始休息".to_string()),
+        None => return Err("没有刚完成的番茄".to_string()),
+    };
+    let s = TimerState {
+        task: prev.task,
+        planned_ms: (minutes * 60000.0).round() as i64,
+        started_at: now_ms(),
+        paused_total: 0,
+        paused_at: None,
+        status: Status::Running,
+        actual_ms: 0,
+        completed: false,
+        ended_at: 0,
+        written: false,
+        session_id: None,
+        duration: None,
+        kind: if long { "longBreak" } else { "shortBreak" }.to_string(),
         port,
         writing: false,
         error: None,
@@ -290,6 +343,14 @@ pub fn timer_end(app: AppHandle, state: State<TimerHandle>) -> Result<(), String
         let s = g.as_mut().ok_or("没有正在进行的计时")?;
         if s.status == Status::Finished {
             return Err("计时已经结束".to_string());
+        }
+        // 休息提前结束不记录（和原版一样，只记录完整休息），直接清掉
+        if s.kind != "work" {
+            remove_file(&app)?;
+            *g = None;
+            drop(g);
+            notify(&app);
+            return Ok(());
         }
         let now = now_ms();
         s.ended_at = now;

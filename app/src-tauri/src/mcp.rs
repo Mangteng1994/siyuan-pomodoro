@@ -254,6 +254,7 @@ pub fn record_focus(
     actual_ms: i64,
     planned_min: f64,
     completed: bool,
+    kind: &str, // work | shortBreak | longBreak
 ) -> Result<Value, String> {
     if task_id.trim().is_empty() {
         return Err("缺少任务 ID".to_string());
@@ -287,7 +288,7 @@ pub fn record_focus(
         "stats",
         json!({
             "action": "create_focus",
-            "type": "work",
+            "type": kind,
             "eventId": task_id,
             "eventTitle": task_title,
             "startTime": start_iso,

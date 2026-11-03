@@ -64,6 +64,8 @@
     <div class="row">
       <button id="tpause">暂停</button>
       <button id="tend">结束</button>
+      <button id="tshort" style="display:none">短休息</button>
+      <button id="tlong" style="display:none">长休息</button>
       <button id="tretry" style="display:none">重试写入</button>
       <button id="tdiscard" style="display:none">放弃</button>
       <button id="tclear" style="display:none">清除</button>
@@ -138,6 +140,7 @@ function render() {
   const f = TimerView.flags(st);
   $("tpause").style.display = $("tend").style.display = f.canPause ? "" : "none";
   $("tpause").textContent = f.pauseLabel;
+  $("tshort").style.display = $("tlong").style.display = f.canBreak ? "" : "none";
   $("tretry").style.display = f.canRetry ? "" : "none";
   $("tdiscard").style.display = f.canDiscard ? "" : "none";
   $("tclear").style.display = f.canClear ? "" : "none";
@@ -156,6 +159,8 @@ function render() {
 const cmd = async (name, args) => { try { await invoke(name, args); } catch (e) { $("info").textContent = String(e); } };
 $("tpause").onclick = () => cmd("timer_toggle_pause");
 $("tend").onclick = () => cmd("timer_end");
+$("tshort").onclick = () => cmd("timer_start_break", { minutes: TimerView.breakMinutes(false), long: false, port: st.port });
+$("tlong").onclick = () => cmd("timer_start_break", { minutes: TimerView.breakMinutes(true), long: true, port: st.port });
 $("tretry").onclick = () => cmd("timer_retry", { port: st.port });
 $("tclear").onclick = () => cmd("timer_clear");
 $("tdiscard").onclick = () => { if (confirm("放弃后这次计时不会写入番茄记录，确定吗？")) cmd("timer_discard"); };

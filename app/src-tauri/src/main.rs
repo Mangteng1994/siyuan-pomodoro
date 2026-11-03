@@ -321,6 +321,7 @@ fn main() {
             search_tasks,
             timer::timer_get,
             timer::timer_start,
+            timer::timer_start_break,
             timer::timer_toggle_pause,
             timer::timer_end,
             timer::timer_retry,
