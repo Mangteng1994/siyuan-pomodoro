@@ -342,35 +342,7 @@ fn init_tray(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// gnullvm 构建下 WebView2 加载器是延迟加载的（见 .cargo/config.toml）：先把内嵌的 DLL 释放到临时目录并加载，
-/// 之后对 WebView2Loader.dll 的调用就会解析到这个已加载的模块。MSVC 构建是静态链接，不需要这一步。
-#[cfg(all(windows, target_env = "gnu"))]
-fn preload_webview2_loader() {
-    const DLL: &[u8] = include_bytes!("../vendor/WebView2Loader.dll");
-    extern "system" {
-        fn LoadLibraryW(name: *const u16) -> isize;
-    }
-    let dir = std::env::temp_dir().join(format!("siyuan-pomodoro-{}", env!("CARGO_PKG_VERSION")));
-    let path = dir.join("WebView2Loader.dll");
-    let same = fs::metadata(&path).map(|m| m.len() == DLL.len() as u64).unwrap_or(false);
-    if !same {
-        let tmp = dir.join(format!("WebView2Loader.{}.tmp", std::process::id()));
-        if fs::create_dir_all(&dir).is_err()
-            || fs::write(&tmp, DLL).is_err()
-            || fs::rename(&tmp, &path).is_err()
-        {
-            let _ = fs::remove_file(&tmp);
-        }
-    }
-    use std::os::windows::ffi::OsStrExt;
-    let wide: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
-    // 失败也不处理：若 exe 旁边放了同名 DLL，延迟加载时仍能找到
-    unsafe { LoadLibraryW(wide.as_ptr()) };
-}
-
 fn main() {
-    #[cfg(all(windows, target_env = "gnu"))]
-    preload_webview2_loader();
     tauri::Builder::default()
         .setup(|app| {
             // 先载入 API token，再启动计时线程（它会自动重试写记录）
