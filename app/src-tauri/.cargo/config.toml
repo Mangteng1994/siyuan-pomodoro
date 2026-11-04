@@ -1,0 +1,9 @@
+# gnullvm 工具链没法像 MSVC 那样把 WebView2 加载器静态链进 exe：
+# 这里改成延迟加载，运行时由 main.rs 先把内嵌的 vendor/WebView2Loader.dll 释放并加载，exe 仍是单文件。
+# 同时静态链接 CRT，免得多出 libunwind.dll。
+[target.x86_64-pc-windows-gnullvm]
+rustflags = [
+  "-C", "target-feature=+crt-static",
+  "-C", "link-arg=-Wl,--delayload=WebView2Loader.dll",
+  "-C", "link-arg=-ldelayimp",
+]

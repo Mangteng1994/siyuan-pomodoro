@@ -1,13 +1,13 @@
 ## 思源番茄钟 v0.1.2
 
-**使用**：下载 `siyuan-pomodoro-v0.1.2-windows-x64.zip`，解压后运行 `siyuan-pomodoro.exe`（Windows 10/11，需要 WebView2，Windows 11 自带）。`WebView2Loader.dll` 必须和 exe 放在同一目录，不能只拿 exe。在“设置”页填内核路径、工作空间、端口，顶部点“启动内核”。
+**使用**：下载 `siyuan-pomodoro-v0.1.2-windows-x64.exe` 直接运行（Windows 10/11，需要 WebView2，Windows 11 自带）。在“设置”页填内核路径、工作空间、端口，顶部点“启动内核”。
 
 ### 相比 v0.1.1
 - 支持访问授权码：内核设了授权码时，在“设置”页填 API token（思源 设置 → 关于 → API token），所有内核请求会带上它；原来这种情况下会报 `status code 401`
 - 401 时提示去设置页填 token
 - token 保存在本机配置文件里（明文）
 - 版本号 0.1.2
-- 打包方式变化：这版改为 zip（exe + `WebView2Loader.dll`），不再是单个 exe
+- 构建工具链换成 gnullvm：WebView2 加载器内嵌在 exe 里，首次启动时释放到临时目录（`%TEMP%\siyuan-pomodoro-0.1.2`），仍是单文件
 
 ### 已知限制
 - 带 token 访问 `/mcp` 尚未在设了授权码的真实空间上验证；如果填了 token 仍报 401，请反馈
@@ -15,4 +15,4 @@
 - 内核内存取决于工作空间大小和云同步频率，本工具不改变内核的内存占用
 - 同时开两个小工具实例会共用计时和笔记文件，互相干扰
 
-SHA256（zip）：`DDBB2FB88AACAF916E02B2C4F4C7AF1BB02757940D088742C68224E7C802C1F9`
+SHA256：`600A8E8FB84A464B47421EDB4BAA96D1BA6A3B6C84C8027324BB2459562AB48D`
