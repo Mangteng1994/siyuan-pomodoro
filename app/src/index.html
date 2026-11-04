@@ -164,6 +164,7 @@
       <div class="f"><label>内核程序路径</label><input id="kernel_path" type="text"></div>
       <div class="f"><label>工作空间</label><input id="workspace" type="text" placeholder="例如 C:\SiYuanData"></div>
       <div class="f"><label>端口</label><input id="port" type="number" min="1" max="65535" style="width:120px"></div>
+      <div class="f"><label>API token（内核设了访问授权码时必填）</label><input id="api_token" type="password" autocomplete="off" placeholder="思源 设置 → 关于 → API token"></div>
       <h3>启动</h3>
       <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--fg);margin:0"><input id="autostart" type="checkbox" style="width:auto">开机自动启动（只进托盘，不弹窗口）</label>
       <h3>休息时长（分钟）</h3>
@@ -186,7 +187,7 @@
 const { invoke } = window.__TAURI__.core;
 const $ = (id) => document.getElementById(id);
 const port = () => Number($("port").value);
-const readConfig = () => ({ kernel_path: $("kernel_path").value.trim(), workspace: $("workspace").value.trim(), port: port() });
+const readConfig = () => ({ kernel_path: $("kernel_path").value.trim(), workspace: $("workspace").value.trim(), port: port(), api_token: $("api_token").value.trim() });
 
 let msgTimer = null;
 function say(text, ok = true) {
@@ -229,7 +230,7 @@ async function act(name, args, doneMsg) {
 $("kstart").onclick = async () => { await invoke("save_config", { config: readConfig() }); act("kernel_start", { config: readConfig() }); };
 $("kstop").onclick = () => act("kernel_stop", { port: port() });
 $("ui").onclick = () => act("open_ui", { port: port() }, "已用默认浏览器打开");
-["kernel_path", "workspace", "port"].forEach((id) => ($(id).onchange = () => invoke("save_config", { config: readConfig() })));
+["kernel_path", "workspace", "port", "api_token"].forEach((id) => ($(id).onchange = () => invoke("save_config", { config: readConfig() })));
 
 // ---- 任务：一律显示全部历史，点一下选中并回到计时页 ----
 let selectedTask = null;
@@ -379,7 +380,7 @@ setInterval(renderClock, 250);
 
 (async () => {
   const c = await invoke("get_config");
-  $("kernel_path").value = c.kernel_path; $("workspace").value = c.workspace; $("port").value = c.port;
+  $("kernel_path").value = c.kernel_path; $("workspace").value = c.workspace; $("port").value = c.port; $("api_token").value = c.api_token || "";
   renderTaskCard(); renderRecent();
   try { $("autostart").checked = await invoke("autostart_get"); } catch {}
   await refresh(); setInterval(refresh, 3000);

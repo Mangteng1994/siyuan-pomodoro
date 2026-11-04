@@ -3,7 +3,35 @@
 
 use serde::Serialize;
 use serde_json::{json, Value};
+use std::sync::Mutex;
 use std::time::Duration;
+
+/// 内核的 API token（思源 设置 → 关于 → API token）。内核开了访问授权码时，所有请求都要带它。
+static API_TOKEN: Mutex<String> = Mutex::new(String::new());
+
+pub fn set_api_token(token: &str) {
+    *API_TOKEN.lock().unwrap() = token.trim().to_string();
+}
+
+/// 给请求加上鉴权头；没填 token 就原样返回。
+pub fn auth(req: ureq::Request) -> ureq::Request {
+    let token = API_TOKEN.lock().unwrap().clone();
+    if token.is_empty() {
+        req
+    } else {
+        req.set("Authorization", &format!("Token {token}"))
+    }
+}
+
+/// 把请求错误转成人话；401 说明内核要求鉴权。
+pub fn describe_err(port: u16, e: ureq::Error) -> String {
+    match e {
+        ureq::Error::Status(401, _) => format!(
+            "内核拒绝访问（端口 {port}，401）：请在设置页填写 API token（思源 设置 → 关于 → API token）"
+        ),
+        e => format!("内核没有响应（端口 {port}）：{e}"),
+    }
+}
 
 fn agent() -> ureq::Agent {
     ureq::AgentBuilder::new()
@@ -12,8 +40,7 @@ fn agent() -> ureq::Agent {
 }
 
 fn post(port: u16, session: Option<&str>, body: &Value) -> Result<(Option<String>, Value), String> {
-    let mut req = agent()
-        .post(&format!("http://127.0.0.1:{port}/mcp"))
+    let mut req = auth(agent().post(&format!("http://127.0.0.1:{port}/mcp")))
         .set("Content-Type", "application/json")
         .set("Accept", "application/json, text/event-stream");
     if let Some(s) = session {
@@ -21,7 +48,7 @@ fn post(port: u16, session: Option<&str>, body: &Value) -> Result<(Option<String
     }
     let resp = req
         .send_string(&body.to_string())
-        .map_err(|e| format!("内核没有响应（端口 {port}）：{e}"))?;
+        .map_err(|e| describe_err(port, e))?;
     let sid = resp.header("Mcp-Session-Id").map(|s| s.to_string());
     let text = resp.into_string().map_err(|e| e.to_string())?;
     let text = text.trim();
@@ -84,8 +111,7 @@ pub fn call_plugin_tool(port: u16, kind: &str, arguments: Value) -> Result<Value
         Ok(v)
     })();
     // 尽力关闭会话，失败不影响结果
-    let _ = agent()
-        .delete(&format!("http://127.0.0.1:{port}/mcp"))
+    let _ = auth(agent().delete(&format!("http://127.0.0.1:{port}/mcp")))
         .set("Mcp-Session-Id", &sid)
         .call();
     result
@@ -116,8 +142,7 @@ pub fn plugin_tool_ready(port: u16, kind: &str) -> bool {
             })
         })
         .unwrap_or(false);
-    let _ = agent()
-        .delete(&format!("http://127.0.0.1:{port}/mcp"))
+    let _ = auth(agent().delete(&format!("http://127.0.0.1:{port}/mcp")))
         .set("Mcp-Session-Id", &sid)
         .call();
     ready
@@ -144,8 +169,7 @@ fn fill_doc_paths(port: u16, items: &mut [TaskItem]) {
         let path = cache
             .entry(id.clone())
             .or_insert_with(|| {
-                let resp = agent
-                    .post(&format!("http://127.0.0.1:{port}/api/filetree/getHPathByID"))
+                let resp = auth(agent.post(&format!("http://127.0.0.1:{port}/api/filetree/getHPathByID")))
                     .set("Content-Type", "application/json")
                     .send_string(&json!({"id": id}).to_string())
                     .ok()?;
