@@ -395,6 +395,7 @@ fn main() {
             timer::timer_get,
             timer::timer_start,
             timer::timer_start_break,
+            timer::timer_next_work,
             timer::timer_toggle_pause,
             timer::timer_end,
             timer::timer_submit_note,

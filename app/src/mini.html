@@ -72,6 +72,7 @@
       <button id="tend">结束</button>
       <button id="tshort" style="display:none">短休息</button>
       <button id="tlong" style="display:none">长休息</button>
+      <button id="tnext" style="display:none" title="沿用同一个任务继续下一个番茄">继续专注</button>
       <button id="tretry" style="display:none">重试写入</button>
       <button id="tdiscard" style="display:none">放弃</button>
       <button id="tclear" style="display:none">清除</button>
@@ -151,14 +152,26 @@ function render() {
   if (f.awaitingNote && !noteShown) setTimeout(() => $("notetext").focus(), 0);
   noteShown = f.awaitingNote;
   $("tshort").style.display = $("tlong").style.display = f.canBreak ? "" : "none";
+  // 休息写入记录后，直接在小窗里接续下一个番茄（沿用同一个任务和上次时长）
+  $("tnext").style.display = f.canNext ? "" : "none";
+  if (f.canNext) {
+    const mins = Math.round((st.work_ms || 25 * 60000) / 60000);
+    $("tnext").textContent = `继续专注 ${mins} 分钟`;
+    $("tnext").title = `沿用任务「${st.task.title}」再开一个 ${mins} 分钟的番茄`;
+  }
   $("tretry").style.display = f.canRetry ? "" : "none";
   $("tdiscard").style.display = f.canDiscard ? "" : "none";
   $("tclear").style.display = f.canClear ? "" : "none";
   $("tshrink").style.display = f.canPause ? "" : "none";
 
   const p = progress();
+  const isBreak = !!st && !!st.kind && st.kind !== "work";
   document.documentElement.style.setProperty("--deg", `${p * 360}deg`);
-  document.documentElement.style.setProperty("--accent", st && st.status === "paused" ? "#e6a23c" : "#e5483d");
+  // 休息阶段整体改绿色，专注红色，暂停橙色
+  document.documentElement.style.setProperty(
+    "--accent",
+    !st ? "#e5483d" : st.status === "paused" ? "#e6a23c" : isBreak ? "#2f9e44" : "#e5483d",
+  );
   $("rt").textContent = time;
   $("bc").textContent = time;
   $("bt").textContent = st ? st.task.title : "";
@@ -177,6 +190,7 @@ $("noteskip").onclick = () => submitNote("");
 $("tshort").onclick = () => cmd("timer_start_break", { minutes: TimerView.breakMinutes(false), long: false, port: st.port });
 $("tlong").onclick = () => cmd("timer_start_break", { minutes: TimerView.breakMinutes(true), long: true, port: st.port });
 $("tretry").onclick = () => cmd("timer_retry", { port: st.port });
+$("tnext").onclick = () => cmd("timer_next_work", { minutes: null, port: st.port });
 $("tclear").onclick = () => cmd("timer_clear");
 // 小窗口里系统自带的确认框会被截断，所以改成就地二次确认：第一次点变成“确定放弃？”，4 秒内再点才放弃
 let discardArm = null;

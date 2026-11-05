@@ -53,6 +53,9 @@ pub struct TimerState {
     pub note: String,
     /// 写记录用的内核端口
     pub port: u16,
+    /// 上一个专注的计划时长（毫秒）：休息结束后用它当接续番茄的默认时长
+    #[serde(default)]
+    pub work_ms: Option<i64>,
     /// 以下两项只在内存里，不落盘
     #[serde(default)]
     pub writing: bool,
@@ -289,9 +292,10 @@ pub fn timer_start(
             task.title = "番茄专注".to_string();
         }
     }
+    let planned_ms = (minutes * 60000.0).round() as i64;
     let s = TimerState {
         task,
-        planned_ms: (minutes * 60000.0).round() as i64,
+        planned_ms,
         started_at,
         paused_total: 0,
         paused_at: None,
@@ -307,6 +311,7 @@ pub fn timer_start(
         note_deadline: 0,
         note: String::new(),
         port,
+        work_ms: Some(planned_ms),
         writing: false,
         error: None,
         recovered: false,
@@ -354,6 +359,67 @@ pub fn timer_start_break(
         note_deadline: 0,
         note: String::new(),
         port,
+        // 休息之后接续的番茄沿用这个时长
+        work_ms: prev.work_ms.or(Some(prev.planned_ms)),
+        writing: false,
+        error: None,
+        recovered: false,
+    };
+    persist(&app, &s)?;
+    *g = Some(s);
+    drop(g);
+    notify(&app);
+    Ok(())
+}
+
+/// 「接续下一个番茄」的计划时长。抽出成纯函数，方便单元测试覆盖各种分支。
+/// 只有「休息已结束且记录已写入」才允许接续；时长优先用调用方给的分钟数，
+/// 否则沿用上一个番茄的 `work_ms`，老版本状态里没有就退回 25 分钟。
+fn plan_next_work(prev: &TimerState, minutes: Option<f64>) -> Result<i64, String> {
+    if !(prev.status == Status::Finished && prev.written) || prev.kind == "work" {
+        return Err("要等休息结束后才能接续下一个番茄".to_string());
+    }
+    Ok(match minutes {
+        Some(m) if m > 0.0 => (m * 60000.0).round() as i64,
+        _ => prev.work_ms.unwrap_or(25 * 60_000),
+    })
+}
+
+/// 休息结束后一键接续下一个番茄：清掉已写入的休息状态，用同一个任务、上次的专注时长再开一个。
+/// 迷你窗口里点一下就能连着做，不用回主窗口。
+#[tauri::command]
+pub fn timer_next_work(
+    app: AppHandle,
+    state: State<TimerHandle>,
+    minutes: Option<f64>,
+    port: u16,
+) -> Result<(), String> {
+    let mut g = state.0.lock().unwrap();
+    let prev = match g.as_ref() {
+        Some(s) => s.clone(),
+        None => return Err("没有刚结束的休息".to_string()),
+    };
+    let planned_ms = plan_next_work(&prev, minutes)?;
+    let started_at = now_ms();
+    let s = TimerState {
+        task: prev.task,
+        planned_ms,
+        started_at,
+        paused_total: 0,
+        paused_at: None,
+        status: Status::Running,
+        actual_ms: 0,
+        completed: false,
+        ended_at: 0,
+        written: false,
+        session_id: None,
+        duration: None,
+        kind: default_kind(),
+        awaiting_note: false,
+        note_deadline: 0,
+        note: String::new(),
+        port,
+        work_ms: Some(planned_ms),
         writing: false,
         error: None,
         recovered: false,
@@ -547,4 +613,75 @@ pub fn show_mini(app: &AppHandle) -> Result<(), String> {
         .build()
         .map(|_| ())
         .map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn st(status: Status, kind: &str, written: bool, work_ms: Option<i64>) -> TimerState {
+        TimerState {
+            task: TaskRef {
+                id: "reminder_1".to_string(),
+                title: "测试任务".to_string(),
+                block_id: None,
+            },
+            planned_ms: 5 * 60_000,
+            started_at: 0,
+            paused_total: 0,
+            paused_at: None,
+            status,
+            actual_ms: 0,
+            completed: true,
+            ended_at: 0,
+            written,
+            session_id: None,
+            duration: None,
+            kind: kind.to_string(),
+            awaiting_note: false,
+            note_deadline: 0,
+            note: String::new(),
+            port: 6806,
+            work_ms,
+            writing: false,
+            error: None,
+            recovered: false,
+        }
+    }
+
+    #[test]
+    fn next_work_reuses_previous_work_duration() {
+        let s = st(Status::Finished, "shortBreak", true, Some(40 * 60_000));
+        assert_eq!(plan_next_work(&s, None).unwrap(), 40 * 60_000);
+    }
+
+    #[test]
+    fn next_work_explicit_minutes_wins() {
+        let s = st(Status::Finished, "longBreak", true, Some(40 * 60_000));
+        assert_eq!(plan_next_work(&s, Some(10.0)).unwrap(), 10 * 60_000);
+    }
+
+    #[test]
+    fn next_work_ignores_invalid_minutes() {
+        let s = st(Status::Finished, "shortBreak", true, Some(30 * 60_000));
+        assert_eq!(plan_next_work(&s, Some(0.0)).unwrap(), 30 * 60_000);
+        assert_eq!(plan_next_work(&s, Some(-5.0)).unwrap(), 30 * 60_000);
+    }
+
+    #[test]
+    fn next_work_defaults_to_25_without_history() {
+        // 老版本 timer.json 没有 work_ms
+        let s = st(Status::Finished, "shortBreak", true, None);
+        assert_eq!(plan_next_work(&s, None).unwrap(), 25 * 60_000);
+    }
+
+    #[test]
+    fn next_work_rejected_unless_finished_written_break() {
+        let running = st(Status::Running, "shortBreak", false, None);
+        assert!(plan_next_work(&running, None).is_err());
+        let not_written = st(Status::Finished, "shortBreak", false, None);
+        assert!(plan_next_work(&not_written, None).is_err());
+        let work = st(Status::Finished, "work", true, Some(25 * 60_000));
+        assert!(plan_next_work(&work, None).is_err());
+    }
 }

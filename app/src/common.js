@@ -52,6 +52,8 @@ const TimerView = {
       canClear: finished && s.written,
       // 番茄记录写入后可以接着休息
       canBreak: finished && s.written && (!s.kind || s.kind === "work"),
+      // 休息写入后可以一键接续下一个番茄（沿用同一个任务和上次的时长）
+      canNext: finished && s.written && !!s.kind && s.kind !== "work",
       awaitingNote,
       canRetry: pending,
       canDiscard: pending,
