@@ -1,0 +1,3 @@
+[build]
+# Windows 发布固定使用 MSVC，WebView2Loader 静态链接到 exe。
+target = "x86_64-pc-windows-msvc"

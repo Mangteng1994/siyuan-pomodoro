@@ -1,6 +1,6 @@
 ## 思源番茄钟 v0.1.5
 
-下载 `siyuan-pomodoro-v0.1.5-windows-x64.zip`，解压后将 `思源番茄钟.exe` 与 `WebView2Loader.dll` 放在同一目录运行。适用于 Windows 10/11，需要 WebView2。
+下载 `siyuan-pomodoro-v0.1.5-windows-x64.exe` 直接运行，无需附带 `WebView2Loader.dll`。采用 MSVC 静态链接加载器的单 exe 方案。适用于 Windows 10/11，系统仍需 WebView2 Runtime。
 
 ### 本次更新
 
@@ -21,4 +21,6 @@
 - 微休息使用系统提示音，不提供插件中的自定义音频路径或音量设置。重新启动后重新安排提醒，不补发离线期间的提醒。
 - 暂不支持正计时；思源同步与插件统计缓存的既有限制仍然存在。
 
-SHA256（zip）：F767FF79A11F7207CD63791B25B40DD4C8DDCB40B3A358F95894E6D095EF706B
+本版已更正发布方式：撤下最初误用 GNU 工具链生成的双文件 ZIP，改为 MSVC 静态链接加载器的单 exe；应用功能及版本标签不变。后续按仓库 `scripts/build-release.ps1` 构建。
+
+SHA256（exe）：`5CC2D96E476A8B9FE48ED8A19B77BD0A314D3D1DD9F6F7E1C294384998CEDC37`

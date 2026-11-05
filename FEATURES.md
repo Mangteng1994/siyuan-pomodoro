@@ -6,7 +6,14 @@
 
 状态：`待做` / `进行中` / `完成` / `已验证`（已验证 = 在测试空间实测通过）
 
-当前发布版本：v0.1.5。Windows x64 发布包为 `siyuan-pomodoro-v0.1.5-windows-x64.zip`，包含 `思源番茄钟.exe` 和 `WebView2Loader.dll`。本次 release 编译通过，未运行测试；更新内容与使用方法见 `RELEASE_NOTES_v0.1.5.md`。
+当前发布版本：v0.1.5。Windows x64 使用单 exe 发布：`siyuan-pomodoro-v0.1.5-windows-x64.exe`，直接运行，不附带 `WebView2Loader.dll`，不采用双文件 ZIP。本次 release 编译通过，未运行测试；更新内容与使用方法见 `RELEASE_NOTES_v0.1.5.md`。
+
+## 固定构建与发布约定
+
+- 使用本机已安装的 Rust MSVC 工具链与 Visual Studio Build Tools，目标固定为 `x86_64-pc-windows-msvc`，静态链接 WebView2 加载器，延续早期单 exe 交付方案。
+- 使用 `pwsh -File .\scripts\build-release.ps1` 构建。该脚本明确选择 MSVC 工具链、目标与产物路径；不要直接用 PATH 中默认的 LLVM/GNU cargo 发布，也不要将 GNU exe 与 DLL 一起打 ZIP 作为替代。
+- 发布附件仅为版本化 exe 和 SHA256 校验文件。发布前检查 PE 依赖列表，不应出现 `WebView2Loader.dll`。系统仍需 WebView2 Runtime，加载器与运行时不是同一项。
+- 构建操作与依赖检查不等于功能测试；用户未要求时不运行测试。完整使用与构建说明见 `README.md`。
 
 ## Must（第一版必须有）
 
@@ -55,6 +62,7 @@
 ## 已知问题与待办（后面再说）
 
 - **2026-11-05 更新交付**：⇄ 按钮、单实例唤起、随机微休息配置及最近任务移除已完成，离线 release 编译成功，未运行测试。新版为 `dist/思源番茄钟.exe`，并复制到 `E:\Programs\siyuan-pomodoro\思源番茄钟.exe`；原使用目录的快捷方式已指向新版。微休息默认关闭，需在“设置 → 随机微休息”启用并保存。后台调度和窗口关闭不会停止专注计时，暂停专注时不提醒。切换新版前请先从托盘退出旧版，避免旧版继续写同一份状态文件。
+- **v0.1.5 打包更正**：最初误用了 PATH 中的 LLVM/GNU 工具链。已恢复 MSVC 静态链接加载器的单 exe，撤换 Release 的双文件 ZIP，改为版本化 exe 与 SHA256 校验文件；发布脚本已加入工具链类型及 exe 依赖检查。不要沿用此前“exe 与 WebView2Loader.dll 放在同一目录”的交付方式。编译及依赖检查通过，未运行功能测试。
 
 - **真实空间启动失败（退出码 26）**：2026-11-03 真实空间内核启动时因 `temp\queue\document-sources\` 里一个未处理完的“文档源恢复记录”报 `recover document sources failed: source changed during operation` 并退出。原因是一次批量改文档（22:58:54）留下的恢复记录，之后文档又变了，内核拒绝继续。已经经用户同意备份并移走（`D:\user\Backup\`），移走后能否正常启动待用户确认。谁做了那次批量改动没查出来，没有证据说是本工具造成的。再遇到同类情况先读 `kernel.log` 和 `C:\SiYuanData\temp\siyuan.log`。
 - **内核内存高**：真实空间的内核约 1.2 GB，主要是空间本身大（21k 个文件、1.29 GB）加云同步每 2 到 3 分钟扫一轮；测试空间内核约 152 MB。曾做过 GOMEMLIMIT 内存上限设置，用户决定先不加，已撤回，之后再议。最有效的办法是在思源里把云同步改成手动或拉长间隔。
