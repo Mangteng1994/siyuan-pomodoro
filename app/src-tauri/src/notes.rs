@@ -69,6 +69,7 @@ pub fn show_notes(app: &AppHandle) -> Result<(), String> {
     }
     tauri::WebviewWindowBuilder::new(app, "notes", tauri::WebviewUrl::App("notes.html".into()))
         .title("悬浮笔记")
+        .skip_taskbar(true)
         .inner_size(300.0, 380.0)
         .min_inner_size(220.0, 160.0)
         .resizable(true)

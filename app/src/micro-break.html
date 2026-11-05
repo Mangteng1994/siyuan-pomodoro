@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>微休息</title>
+<style>
+  :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+  body { text-align: center; padding: 12px; margin: 0; }
+  h2 { margin: 8px 0; font-size: 19px; }
+  #seconds { font-size: 42px; font-variant-numeric: tabular-nums; color: #39896c; }
+  p { margin: 8px 0 16px; font-size: 13px; opacity: .75; }
+  button { font: inherit; cursor: pointer; padding: 6px 18px; border-radius: 8px; }
+</style>
+<h2>让眼睛和身体休息一下</h2>
+<div id="seconds">…</div>
+<p>看看远处，放松肩颈。专注计时继续。</p>
+<button id="dismiss">跳过本次</button>
+<script>
+const { invoke } = window.__TAURI__.core;
+const render = (s) => { document.getElementById('seconds').textContent = s.active ? `${s.remaining_seconds} 秒` : '微休息已结束'; };
+window.__TAURI__.event.listen('micro-break-changed', (event) => render(event.payload));
+invoke('micro_break_get').then(render);
+document.getElementById('dismiss').onclick = () => invoke('micro_break_dismiss');
+</script>
+</html>

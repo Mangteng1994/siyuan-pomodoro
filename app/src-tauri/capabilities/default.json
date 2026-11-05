@@ -2,6 +2,6 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "main window",
-  "windows": ["main", "mini", "notes"],
+  "windows": ["main", "mini", "notes", "micro-break"],
   "permissions": ["core:default", "core:window:allow-start-dragging"]
 }

@@ -7,3 +7,4 @@ scripts/*.err
 scripts/*.out
 *.pid.json
 output/
+dist/

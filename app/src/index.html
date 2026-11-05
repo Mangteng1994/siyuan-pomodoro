@@ -56,6 +56,9 @@
   .chips { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin-bottom: 12px; }
   .chip { padding: 5px 12px; border-radius: 16px; font-size: 13px; }
   .chip.on { background: var(--accent-bg); border-color: var(--accent); color: var(--accent); }
+  .recent-task { display: inline-flex; align-items: stretch; }
+  .recent-task .chip { border-radius: 16px 0 0 16px; }
+  .recent-remove { padding: 5px 9px; border-radius: 0 16px 16px 0; margin-left: -1px; font-size: 13px; color: var(--sub); }
   .chips input { width: 64px; padding: 5px 8px; text-align: center; }
   .btns { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
   .btns button { min-width: 84px; }
@@ -172,6 +175,19 @@
         <div><label style="font-size:12px;color:var(--sub)">短休息</label><input id="bshort" type="number" min="0.1" step="any"></div>
         <div><label style="font-size:12px;color:var(--sub)">长休息</label><input id="blong" type="number" min="0.1" step="any"></div>
       </div>
+      <h3>随机微休息</h3>
+      <label><input id="micro_enabled" type="checkbox">启用随机微休息</label>
+      <div class="inl">
+        <div><label>最小间隔（分钟）</label><input id="micro_min" type="number" min="0.1" max="1440" step="0.1" value="3"></div>
+        <div><label>最大间隔（分钟）</label><input id="micro_max" type="number" min="0.1" max="1440" step="0.1" value="5"></div>
+      </div>
+      <div class="f"><label>每次休息（秒）</label><input id="micro_seconds" type="number" min="1" max="3600" step="1" value="10"></div>
+      <div style="display:flex;gap:16px;margin:8px 0">
+        <label><input id="micro_popup" type="checkbox" checked>弹窗提醒</label>
+        <label><input id="micro_sound" type="checkbox" checked>开始和结束提示音</label>
+      </div>
+      <button id="micro_save">保存微休息设置</button>
+      <p style="font-size:12px;color:var(--sub)">仅在专注运行时随机提醒，暂停时停止，专注倒计时继续；微休息不写入番茄记录。关闭弹窗后仍可通过提示音提醒。</p>
       <h3>同步</h3>
       <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--fg);margin:0 0 6px"><input id="sync_enabled" type="checkbox" style="width:auto">定时触发思源同步（后台内核不会自己同步，手机端要它才能拿到记录）</label>
       <div id="syncsetting" style="font-size:12px;color:var(--sub);margin:0 0 10px"></div>
@@ -202,6 +218,14 @@ const readConfig = () => ({
   port: port(),
   api_token: $("api_token").value.trim(),
   sync_enabled: $("sync_enabled").checked,
+  micro_break: {
+    enabled: $("micro_enabled").checked,
+    min_minutes: Number($("micro_min").value),
+    max_minutes: Number($("micro_max").value),
+    duration_seconds: Number($("micro_seconds").value),
+    popup: $("micro_popup").checked,
+    sound: $("micro_sound").checked,
+  },
 });
 
 let msgTimer = null;
@@ -361,12 +385,25 @@ function renderRecent() {
   $("recentbox").style.display = list.length ? "" : "none";
   const box = $("recent"); box.replaceChildren();
   for (const t of list) {
+    const item = document.createElement("span");
+    item.className = "recent-task";
     const b = document.createElement("button");
     b.className = "chip" + (selectedTask && selectedTask.id === t.id ? " on" : "");
     b.textContent = t.title.length > 14 ? t.title.slice(0, 14) + "…" : t.title;
     b.title = t.title + (t.doc_path ? `（${t.doc_path}）` : "");
     b.onclick = () => { selectedTask = t; renderTaskCard(); renderRecent(); };
-    box.appendChild(b);
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "recent-remove";
+    remove.textContent = "×";
+    remove.title = "从最近用过中移除";
+    remove.setAttribute("aria-label", `从最近用过中移除：${t.title}`);
+    remove.onclick = () => {
+      try { localStorage.setItem("recentTasks", JSON.stringify(loadRecent().filter((x) => x.id !== t.id))); } catch { return; }
+      renderRecent();
+    };
+    item.append(b, remove);
+    box.appendChild(item);
   }
 }
 
@@ -416,6 +453,17 @@ $("synconow").onclick = async () => {
   refreshSync(); refresh();
 };
 $("sync_enabled").onchange = () => invoke("save_config", { config: readConfig() });
+$("micro_save").onclick = async () => {
+  const config = readConfig();
+  const m = config.micro_break;
+  if (!Number.isFinite(m.min_minutes) || !Number.isFinite(m.max_minutes)
+      || m.min_minutes < 0.1 || m.max_minutes < m.min_minutes || m.max_minutes > 1440
+      || !Number.isInteger(m.duration_seconds) || m.duration_seconds < 1 || m.duration_seconds > 3600) {
+    return say("间隔需为 0.1～1440 分钟，最大值不能小于最小值；休息需为 1～3600 整数秒", false);
+  }
+  if (m.enabled && !m.popup && !m.sound) return say("请至少开启弹窗或提示音", false);
+  if (await cmd("save_config", { config })) say("微休息设置已保存，下一次提醒按新设置安排");
+};
 
 // ---- 开机自启（C3） ----
 $("autostart").onchange = async () => {
@@ -446,6 +494,13 @@ setInterval(renderClock, 250);
   const c = await invoke("get_config");
   $("kernel_path").value = c.kernel_path; $("workspace").value = c.workspace; $("port").value = c.port; $("api_token").value = c.api_token || "";
   $("sync_enabled").checked = c.sync_enabled !== false;
+  const micro = c.micro_break || {};
+  $("micro_enabled").checked = micro.enabled === true;
+  $("micro_min").value = micro.min_minutes ?? 3;
+  $("micro_max").value = micro.max_minutes ?? 5;
+  $("micro_seconds").value = micro.duration_seconds ?? 10;
+  $("micro_popup").checked = micro.popup !== false;
+  $("micro_sound").checked = micro.sound !== false;
   renderTaskCard(); renderRecent();
   try { $("autostart").checked = await invoke("autostart_get"); } catch {}
   await refresh(); setInterval(refresh, 3000);

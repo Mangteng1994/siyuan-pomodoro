@@ -22,6 +22,8 @@ pub(crate) struct Config {
     /// 定时触发思源原生同步（间隔跟随思源自己的设置，见 docs/spike-sync.md）
     #[serde(default = "default_true")]
     pub sync_enabled: bool,
+    #[serde(default)]
+    pub micro_break: micro_break::Settings,
 }
 
 fn default_true() -> bool {
@@ -37,6 +39,7 @@ impl Default for Config {
             port: 6806,
             api_token: String::new(),
             sync_enabled: true,
+            micro_break: micro_break::Settings::default(),
         }
     }
 }
@@ -130,10 +133,13 @@ fn get_config(app: tauri::AppHandle) -> Result<Config, String> {
 
 #[tauri::command]
 fn save_config(app: tauri::AppHandle, config: Config) -> Result<(), String> {
+    config.micro_break.validate()?;
     mcp::set_api_token(&config.api_token);
     let path = config_dir(&app)?.join("config.json");
     let text = serde_json::to_string_pretty(&config).map_err(|e| e.to_string())?;
-    fs::write(path, text).map_err(|e| e.to_string())
+    let tmp = path.with_extension("json.tmp");
+    fs::write(&tmp, text).map_err(|e| e.to_string())?;
+    fs::rename(tmp, path).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -285,6 +291,8 @@ async fn search_tasks(
 mod notes;
 mod sync;
 mod timer;
+mod micro_break;
+mod single_instance;
 
 const RUN_KEY: &str = r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run";
 const RUN_NAME: &str = "SiYuanPomodoro";
@@ -363,11 +371,20 @@ fn init_tray(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn main() {
+    // 先取得进程互斥，再加载配置、计时和托盘，重复进程不会碰状态文件。
+    let _instance = match single_instance::acquire() {
+        Ok(Some(instance)) => instance,
+        Ok(None) => return,
+        Err(e) => panic!("无法建立单实例保护：{e}"),
+    };
+    let wake_event = _instance.wake_event();
     tauri::Builder::default()
-        .setup(|app| {
+        .setup(move |app| {
+            single_instance::listen(app.handle().clone(), wake_event);
             // 先载入 API token，再启动计时线程（它会自动重试写记录）
             let _ = get_config(app.handle().clone());
             timer::init(app)?;
+            micro_break::init(app);
             sync::init(app)?;
             init_tray(app)?;
             // 开机自启时带 --hidden：只进托盘，不弹主窗口
@@ -381,6 +398,9 @@ fn main() {
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
+                if window.label() == "micro-break" {
+                    micro_break::micro_break_dismiss(window.app_handle().clone(), window.state::<micro_break::Handle>());
+                }
                 let _ = window.hide();
             }
         })
@@ -410,7 +430,9 @@ fn main() {
             timer::open_mini,
             timer::set_mini_mode,
             sync::sync_status,
-            sync::sync_now
+            sync::sync_now,
+            micro_break::micro_break_get,
+            micro_break::micro_break_dismiss
         ])
         .run(tauri::generate_context!())
         .expect("启动失败");

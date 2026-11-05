@@ -606,6 +606,7 @@ pub fn show_mini(app: &AppHandle) -> Result<(), String> {
     }
     tauri::WebviewWindowBuilder::new(app, "mini", tauri::WebviewUrl::App("mini.html".into()))
         .title("番茄钟")
+        .skip_taskbar(true)
         .inner_size(250.0, 200.0)
         .min_inner_size(230.0, 170.0)
         .resizable(true)
