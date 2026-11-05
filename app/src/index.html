@@ -172,6 +172,15 @@
         <div><label style="font-size:12px;color:var(--sub)">短休息</label><input id="bshort" type="number" min="0.1" step="any"></div>
         <div><label style="font-size:12px;color:var(--sub)">长休息</label><input id="blong" type="number" min="0.1" step="any"></div>
       </div>
+      <h3>同步</h3>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--fg);margin:0 0 6px"><input id="sync_enabled" type="checkbox" style="width:auto">定时触发思源同步（后台内核不会自己同步，手机端要它才能拿到记录）</label>
+      <div id="syncsetting" style="font-size:12px;color:var(--sub);margin:0 0 10px"></div>
+      <div class="inl" style="align-items:flex-start">
+        <button id="synconow" style="min-width:110px;flex:none">立即同步</button>
+        <div id="syncinfo" style="font-size:12px;color:var(--sub);white-space:pre-wrap"></div>
+      </div>
+      <div id="syncproxy" style="display:none;font-size:12px;color:var(--bad);margin-top:8px;white-space:pre-wrap"></div>
+      <div style="font-size:12px;color:var(--sub);margin-top:8px">间隔跟随思源「设置 → 关于 → 同步」里的自动同步间隔；同步本身由思源完成，本工具只负责按时触发。</div>
     </section>
   </main>
 
@@ -187,7 +196,13 @@
 const { invoke } = window.__TAURI__.core;
 const $ = (id) => document.getElementById(id);
 const port = () => Number($("port").value);
-const readConfig = () => ({ kernel_path: $("kernel_path").value.trim(), workspace: $("workspace").value.trim(), port: port(), api_token: $("api_token").value.trim() });
+const readConfig = () => ({
+  kernel_path: $("kernel_path").value.trim(),
+  workspace: $("workspace").value.trim(),
+  port: port(),
+  api_token: $("api_token").value.trim(),
+  sync_enabled: $("sync_enabled").checked,
+});
 
 let msgTimer = null;
 function say(text, ok = true) {
@@ -214,9 +229,10 @@ async function refresh() {
     const s = await invoke("kernel_status", { port: port() });
     kernelRunning = s.running;
     $("dot").classList.toggle("on", s.running);
-    $("status").textContent = s.running
+    const suffix = syncSuffix();
+    $("status").textContent = (s.running
       ? `内核运行中 · ${port()}${s.owned ? "" : "（非本工具启动）"}`
-      : "内核未运行";
+      : "内核未运行") + (suffix ? ` · ${suffix}` : "");
     $("kstart").style.display = s.running ? "none" : "";
     $("kstop").style.display = s.running && s.owned ? "" : "none";
   } catch (e) { $("status").textContent = "状态检测失败：" + e; }
@@ -354,6 +370,53 @@ function renderRecent() {
   }
 }
 
+// ---- 同步（后端定时调内核 /api/sync/performSync；这里只显示与手动触发） ----
+let syncState = null;
+function ago(ts) {
+  const d = Date.now() - ts;
+  if (d < 60000) return "刚刚";
+  if (d < 3600000) return `${Math.floor(d / 60000)} 分钟前`;
+  if (d < 86400000) return `${Math.floor(d / 3600000)} 小时前`;
+  return `${Math.floor(d / 86400000)} 天前`;
+}
+function syncSuffix() {
+  const s = syncState;
+  if (!s) return "";
+  if (s.syncing) return "同步中…";
+  if (!s.last_sync_at) return s.last_error ? "同步失败" : "";
+  return (s.last_ok ? "上次同步 " : "同步失败 ") + ago(s.last_sync_at);
+}
+function renderSync() {
+  const s = syncState;
+  const info = $("syncinfo"), proxy = $("syncproxy"), setting = $("syncsetting");
+  if (!s) { info.textContent = ""; proxy.style.display = "none"; setting.textContent = ""; return; }
+  setting.textContent = s.siyuan_enabled
+    ? (s.siyuan_interval_sec > 0
+      ? `思源设置：已启用同步，自动同步间隔 ${s.siyuan_interval_sec} 秒（思源默认 30 秒，本工具照此触发）`
+      : "思源设置：已启用同步，但没有设置自动同步间隔 → 只能手动同步")
+    : "思源设置：同步未启用 → 触发也没用";
+  let text;
+  if (s.syncing) text = `同步中…（${Math.round(s.elapsed_ms / 1000)} 秒）`;
+  else if (!s.last_sync_at) text = s.last_error ? `上次同步失败：${s.last_error}` : "还没有同步过";
+  else text = `${s.last_ok ? "上次同步" : "上次同步失败"}：${ago(s.last_sync_at)}，耗时 ${(s.duration_ms / 1000).toFixed(1)} 秒`
+    + (s.last_error ? `\n${s.last_error}` : "") + (s.last_stat ? `\n${s.last_stat}` : "");
+  info.textContent = text;
+  info.style.color = s.syncing ? "var(--sub)" : (s.last_ok ? "var(--sub)" : "var(--bad)");
+  if (s.proxy_warning) { proxy.textContent = `⚠ ${s.proxy_warning}`; proxy.style.display = ""; }
+  else proxy.style.display = "none";
+}
+async function refreshSync() {
+  try { syncState = await invoke("sync_status"); } catch { syncState = null; }
+  renderSync();
+}
+$("synconow").onclick = async () => {
+  if (!kernelRunning) return say("内核没有运行，先启动内核再同步", false);
+  say("正在同步，可能要好几分钟…");
+  try { say(await invoke("sync_now", { port: port() })); } catch (e) { say(String(e), false); }
+  refreshSync(); refresh();
+};
+$("sync_enabled").onchange = () => invoke("save_config", { config: readConfig() });
+
 // ---- 开机自启（C3） ----
 $("autostart").onchange = async () => {
   const want = $("autostart").checked;
@@ -376,14 +439,17 @@ $("tshort").onclick = () => startBreak(false);
 $("tlong").onclick = () => startBreak(true);
 
 window.__TAURI__.event.listen("timer-changed", loadTimer);
+window.__TAURI__.event.listen("sync-changed", () => { refreshSync(); });
 setInterval(renderClock, 250);
 
 (async () => {
   const c = await invoke("get_config");
   $("kernel_path").value = c.kernel_path; $("workspace").value = c.workspace; $("port").value = c.port; $("api_token").value = c.api_token || "";
+  $("sync_enabled").checked = c.sync_enabled !== false;
   renderTaskCard(); renderRecent();
   try { $("autostart").checked = await invoke("autostart_get"); } catch {}
   await refresh(); setInterval(refresh, 3000);
+  await refreshSync(); setInterval(refreshSync, 3000);
   await loadTimer();
   const s = timerState;
   if (s && s.recovered) {

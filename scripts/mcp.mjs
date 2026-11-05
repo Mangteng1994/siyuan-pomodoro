@@ -1,7 +1,22 @@
 // 用法: node mcp.mjs <task|stats|project|habit> '<json 参数>' [端口]
+// 内核开了访问授权码时，需要带 API token：从番茄钟的 config.json 里读（可用 SIYUAN_TOKEN 覆盖）
+import { readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+
 const [,, kind, argsJson = '{}', port = '6807'] = process.argv;
 const url = `http://127.0.0.1:${port}/mcp`;
-const headers = { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' };
+const token = process.env.SIYUAN_TOKEN || (() => {
+  try {
+    const dir = join(process.env.APPDATA || join(homedir(), 'AppData/Roaming'), 'com.local.siyuan-pomodoro');
+    return JSON.parse(readFileSync(join(dir, 'config.json'), 'utf8')).api_token || '';
+  } catch { return ''; }
+})();
+const headers = {
+  'Content-Type': 'application/json',
+  Accept: 'application/json, text/event-stream',
+  ...(token ? { Authorization: `Token ${token}` } : {}),
+};
 const post = async (body, sid) => {
   const r = await fetch(url, { method: 'POST', headers: sid ? { ...headers, 'Mcp-Session-Id': sid } : headers, body: JSON.stringify(body) });
   const text = await r.text();

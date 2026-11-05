@@ -132,6 +132,9 @@ fn spawn_write(app: AppHandle, shared: Shared) {
             }
         };
         notify(&app);
+        // 同步进行中时稍等，避免和同步的 checkout 抢同一批文件
+        crate::sync::wait_write_slot(Duration::from_secs(60));
+        crate::sync::begin_write();
         let result = mcp::record_focus(
             snap.port,
             &snap.task.id,
@@ -144,6 +147,7 @@ fn spawn_write(app: AppHandle, shared: Shared) {
             &snap.kind,
             &snap.note,
         );
+        crate::sync::end_write();
         {
             let mut g = shared.lock().unwrap();
             if let Some(s) = g.as_mut() {

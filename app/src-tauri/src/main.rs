@@ -12,13 +12,20 @@ const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 const KERNEL_IMAGE: &str = "SiYuan-Kernel.exe";
 
 #[derive(Serialize, Deserialize, Clone)]
-struct Config {
-    kernel_path: String,
-    workspace: String,
-    port: u16,
+pub(crate) struct Config {
+    pub kernel_path: String,
+    pub workspace: String,
+    pub port: u16,
     /// 思源 API token；内核设了访问授权码时必填
     #[serde(default)]
-    api_token: String,
+    pub api_token: String,
+    /// 定时触发思源原生同步（间隔跟随思源自己的设置，见 docs/spike-sync.md）
+    #[serde(default = "default_true")]
+    pub sync_enabled: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 impl Default for Config {
@@ -29,8 +36,20 @@ impl Default for Config {
             workspace: String::new(),
             port: 6806,
             api_token: String::new(),
+            sync_enabled: true,
         }
     }
+}
+
+/// 后台线程用：读配置，读不到就给默认值（不让线程崩）。
+pub(crate) fn read_config(app: &tauri::AppHandle) -> Config {
+    let config = config_dir(app)
+        .ok()
+        .and_then(|d| fs::read_to_string(d.join("config.json")).ok())
+        .and_then(|t| serde_json::from_str::<Config>(&t).ok())
+        .unwrap_or_default();
+    mcp::set_api_token(&config.api_token);
+    config
 }
 
 #[derive(Serialize, Deserialize)]
@@ -47,7 +66,7 @@ struct Status {
     owned: bool,
 }
 
-fn config_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+pub(crate) fn config_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     Ok(dir)
@@ -264,6 +283,7 @@ async fn search_tasks(
 }
 
 mod notes;
+mod sync;
 mod timer;
 
 const RUN_KEY: &str = r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run";
@@ -348,6 +368,7 @@ fn main() {
             // 先载入 API token，再启动计时线程（它会自动重试写记录）
             let _ = get_config(app.handle().clone());
             timer::init(app)?;
+            sync::init(app)?;
             init_tray(app)?;
             // 开机自启时带 --hidden：只进托盘，不弹主窗口
             if std::env::args().any(|a| a == "--hidden") {
@@ -386,7 +407,9 @@ fn main() {
             notes::notes_save,
             notes::open_notes,
             timer::open_mini,
-            timer::set_mini_mode
+            timer::set_mini_mode,
+            sync::sync_status,
+            sync::sync_now
         ])
         .run(tauri::generate_context!())
         .expect("启动失败");

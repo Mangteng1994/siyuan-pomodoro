@@ -327,6 +327,49 @@ pub fn record_focus(
     Ok(v["data"].clone())
 }
 
+/// 调内核普通 HTTP API（不是 MCP），返回解析后的 JSON。同步可能要跑几分钟，超时给到 30 分钟。
+fn api_post(port: u16, path: &str, body: &Value) -> Result<Value, String> {
+    let agent = ureq::AgentBuilder::new()
+        .timeout(Duration::from_secs(1800))
+        .build();
+    let text = auth(agent.post(&format!("http://127.0.0.1:{port}{path}")))
+        .set("Content-Type", "application/json")
+        .send_string(&body.to_string())
+        .map_err(|e| describe_err(port, e))?
+        .into_string()
+        .map_err(|e| e.to_string())?;
+    serde_json::from_str(text.trim()).map_err(|e| format!("无法解析内核返回：{e}"))
+}
+
+pub struct SyncInfo {
+    /// 内核记录的“上次同步时间”（毫秒），用来判断这次是否真的跑完
+    pub synced: i64,
+    /// 内核给出的同步摘要（含 <br> 等 HTML 片段）
+    pub stat: String,
+}
+
+/// 读内核的同步状态（/api/sync/getSyncInfo）。内核没起来或没配同步都会返回 Err。
+pub fn sync_info(port: u16) -> Result<SyncInfo, String> {
+    let v = api_post(port, "/api/sync/getSyncInfo", &json!({}))?;
+    if v["code"].as_i64().unwrap_or(-1) != 0 {
+        return Err(v["msg"].as_str().filter(|s| !s.is_empty()).unwrap_or("内核拒绝读取同步状态").to_string());
+    }
+    Ok(SyncInfo {
+        synced: v["data"]["synced"].as_i64().unwrap_or(0),
+        stat: v["data"]["stat"].as_str().unwrap_or("").to_string(),
+    })
+}
+
+/// 触发一次思源原生同步（/api/sync/performSync）。阻塞到内核把同步做完。
+pub fn perform_sync(port: u16) -> Result<(), String> {
+    let v = api_post(port, "/api/sync/performSync", &json!({}))?;
+    if v["code"].as_i64().unwrap_or(-1) != 0 {
+        let msg = v["msg"].as_str().filter(|s| !s.is_empty()).unwrap_or("同步失败");
+        return Err(msg.to_string());
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -348,5 +391,28 @@ mod tests {
         assert_eq!(iso_from_ms(1793625000000), "2026-11-02T13:10:00.000Z");
         assert_eq!(iso_from_ms(1793627100123), "2026-11-02T13:45:00.123Z");
         assert_eq!(iso_from_ms(951782400000), "2000-02-29T00:00:00.000Z"); // 闰日
+    }
+
+    /// 真打本地内核的联调测试（默认跳过）：cargo test -- --ignored --nocapture
+    /// 会真的发起一次思源同步，所以只在手动验证时跑。
+    #[test]
+    #[ignore]
+    fn live_sync_roundtrip() {
+        // token 从番茄钟自己的 config.json 里取，不写死在仓库里
+        let appdata = std::env::var("APPDATA").unwrap_or_default();
+        let path = std::path::PathBuf::from(appdata)
+            .join("com.local.siyuan-pomodoro")
+            .join("config.json");
+        let text = std::fs::read_to_string(path).expect("读不到 config.json");
+        let cfg: Value = serde_json::from_str(&text).expect("config.json 解析失败");
+        set_api_token(cfg["api_token"].as_str().unwrap_or(""));
+        let port = cfg["port"].as_u64().unwrap_or(6806) as u16;
+
+        let before = sync_info(port).expect("读同步状态失败：内核没启动或 token 不对？");
+        println!("before synced={}", before.synced);
+        perform_sync(port).expect("触发同步失败");
+        let after = sync_info(port).expect("同步后读状态失败");
+        println!("after  synced={} stat={}", after.synced, after.stat);
+        assert!(after.synced >= before.synced, "同步时间不应该倒退");
     }
 }
