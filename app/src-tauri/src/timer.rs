@@ -44,11 +44,9 @@ pub struct TimerState {
     /// work（番茄）| shortBreak | longBreak（休息）。旧的 timer.json 没有这一项，按番茄处理
     #[serde(default = "default_kind")]
     pub kind: String,
-    /// 专注结束后等用户填备注：等到填完、点跳过或超时，才写记录
+    /// 专注结束后持续等待用户填备注，只有保存或点击跳过才写记录
     #[serde(default)]
     pub awaiting_note: bool,
-    #[serde(default)]
-    pub note_deadline: i64,
     #[serde(default)]
     pub note: String,
     /// 写记录用的内核端口
@@ -72,9 +70,6 @@ fn default_kind() -> String {
 
 /// 记录写入失败后的自动重试间隔
 const RETRY_INTERVAL: Duration = Duration::from_secs(30);
-
-/// 专注结束后等用户填备注的时间，超时按空备注写入，不会卡住记录
-const NOTE_WAIT_MS: i64 = 120_000;
 
 pub type Shared = Arc<Mutex<Option<TimerState>>>;
 
@@ -197,7 +192,7 @@ pub fn init(app: &mut tauri::App) -> Result<(), String> {
         eprintln!("{e}");
     }
 
-    // 恢复时已结束但没写入的，直接补写
+    // 恢复时补写已提交但未写入的记录；等待备注的状态继续等待用户操作
     spawn_write(handle.clone(), shared.clone());
 
     // 到点检测线程；写入失败（比如内核没开）后每隔一段时间自动重试，内核一起来记录就补上
@@ -215,22 +210,6 @@ pub fn init(app: &mut tauri::App) -> Result<(), String> {
             last_try = std::time::Instant::now();
             spawn_write(handle.clone(), shared.clone());
         }
-        // 等备注超时：按当前备注（可能是空）写入
-        let note_timeout = {
-            let mut g = shared.lock().unwrap();
-            match g.as_mut() {
-                Some(s) if s.status == Status::Finished && s.awaiting_note && now_ms() >= s.note_deadline => {
-                    s.awaiting_note = false;
-                    let _ = persist(&handle, s);
-                    true
-                }
-                _ => false,
-            }
-        };
-        if note_timeout {
-            notify(&handle);
-            spawn_write(handle.clone(), shared.clone());
-        }
         let finished = {
             let mut g = shared.lock().unwrap();
             match g.as_mut() {
@@ -243,7 +222,6 @@ pub fn init(app: &mut tauri::App) -> Result<(), String> {
                     // 只有专注结束才问备注，休息不问
                     if s.kind == "work" {
                         s.awaiting_note = true;
-                        s.note_deadline = now_ms() + NOTE_WAIT_MS;
                     }
                     let _ = persist(&handle, s);
                     true
@@ -308,7 +286,6 @@ pub fn timer_start(
         duration: None,
         kind: default_kind(),
         awaiting_note: false,
-        note_deadline: 0,
         note: String::new(),
         port,
         work_ms: Some(planned_ms),
@@ -356,7 +333,6 @@ pub fn timer_start_break(
         duration: None,
         kind: if long { "longBreak" } else { "shortBreak" }.to_string(),
         awaiting_note: false,
-        note_deadline: 0,
         note: String::new(),
         port,
         // 休息之后接续的番茄沿用这个时长
@@ -416,7 +392,6 @@ pub fn timer_next_work(
         duration: None,
         kind: default_kind(),
         awaiting_note: false,
-        note_deadline: 0,
         note: String::new(),
         port,
         work_ms: Some(planned_ms),
@@ -477,7 +452,6 @@ pub fn timer_end(app: AppHandle, state: State<TimerHandle>) -> Result<(), String
         s.paused_at = None;
         s.status = Status::Finished;
         s.awaiting_note = true;
-        s.note_deadline = now + NOTE_WAIT_MS;
         persist(&app, s)?;
     }
     notify(&app);
@@ -640,7 +614,6 @@ mod tests {
             duration: None,
             kind: kind.to_string(),
             awaiting_note: false,
-            note_deadline: 0,
             note: String::new(),
             port: 6806,
             work_ms,

@@ -10,10 +10,11 @@
   button { cursor: pointer; font: inherit; }
 
   /* 普通模式：和之前一样的小窗，带按钮 */
-  #normal { padding: 8px 10px; height: 100%; display: flex; flex-direction: column; }
-  #notebox { flex: 1; min-height: 0; flex-direction: column; }
+  #normal { box-sizing: border-box; padding: 8px 10px; height: 100%; display: flex; flex-direction: column; overflow-y: auto; }
+  #normal > * { flex-shrink: 0; }
+  #notebox { flex: 1 0 90px; min-height: 90px; flex-direction: column; }
   #notebox textarea { flex: 1; min-height: 40px; resize: vertical; }
-  #clock { font-size: 40px; line-height: 1.1; text-align: center; font-variant-numeric: tabular-nums; }
+  #clock { flex: none; padding: 4px 0; font-size: 40px; line-height: 1.2; text-align: center; font-variant-numeric: tabular-nums; }
   #info { font-size: 12px; text-align: center; opacity: .8; margin: 2px 0 6px; min-height: 30px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
   .row { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
   #normal button { padding: 3px 10px; font-size: 12px; }
@@ -75,7 +76,7 @@
       <button id="tnext" style="display:none" title="沿用同一个任务继续下一个番茄">继续专注</button>
       <button id="tretry" style="display:none">重试写入</button>
       <button id="tdiscard" style="display:none">放弃</button>
-      <button id="tclear" style="display:none">清除</button>
+      <button id="tclear" style="display:none" title="结束本次计时显示，已保存的番茄记录会保留">完成</button>
       <button id="tshrink" title="切换到迷你模式" aria-label="切换到迷你模式">⇄</button>
     </div>
   </div>
@@ -143,7 +144,7 @@ function render() {
   const time = st ? TimerView.fmt(TimerView.remaining(st)) : "--:--";
   $("clock").textContent = time;
   document.title = st && st.status !== "finished" ? `${time} 番茄钟` : "番茄钟";
-  $("info").textContent = st ? TimerView.info(st) : "没有计时（请在主窗口选任务开始）";
+  $("info").textContent = st ? TimerView.info(st) : "没有计时（请在主窗口开始专注）";
   const f = TimerView.flags(st);
   $("tpause").style.display = $("tend").style.display = f.canPause ? "" : "none";
   $("tpause").textContent = f.pauseLabel;
