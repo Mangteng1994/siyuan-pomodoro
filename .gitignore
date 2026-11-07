@@ -8,3 +8,6 @@ scripts/*.out
 *.pid.json
 output/
 dist/
+demo-workspace/
+video/build/
+video/node_modules/
