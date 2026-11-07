@@ -6,7 +6,7 @@
 
 状态：`待做` / `进行中` / `完成` / `已验证`（已验证 = 在测试空间实测通过）
 
-当前发布版本：v0.1.6。Windows x64 使用单 exe 发布 `siyuan-pomodoro-v0.1.6-windows-x64.exe`，直接运行。本次取消专注结束后备注的等待期限，并修正迷你窗口备注布局。MSVC release 编译与 PE 依赖检查通过，未运行测试。更新内容与使用方法见 `RELEASE_NOTES_v0.1.6.md`。
+当前发布版本：v0.1.7。Windows x64 使用单 exe 发布 `siyuan-pomodoro-v0.1.7-windows-x64.exe`，直接运行。本次在设置页底部加入微信打赏二维码。MSVC release 编译与 PE 依赖检查通过，未运行测试。更新内容与使用方法见 `RELEASE_NOTES_v0.1.7.md`。
 
 ## 固定构建与发布约定
 
