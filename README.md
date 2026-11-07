@@ -4,7 +4,7 @@
 
 ## 下载与使用
 
-从 [Releases](https://github.com/Mangteng1994/siyuan-pomodoro/releases) 下载 `siyuan-pomodoro-v0.1.7-windows-x64.exe`，直接运行。
+从 [Releases](https://github.com/Mangteng1994/siyuan-pomodoro/releases) 下载 `siyuan-pomodoro-v0.1.8-windows-x64.exe`，直接运行。
 
 **发布采用与早期单文件版本一致的单 exe 方案：通过 MSVC 静态链接 WebView2 加载器，无需下载或在 exe 旁放置 `WebView2Loader.dll`，无需解压双文件 ZIP。** 系统仍需安装 Microsoft Edge WebView2 Runtime；加载器静态链接不等于将整个浏览器运行时打入 exe。
 
