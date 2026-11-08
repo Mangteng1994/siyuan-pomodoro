@@ -14,10 +14,20 @@
   #normal > * { flex-shrink: 0; }
   #notebox { flex: 1 0 90px; min-height: 90px; flex-direction: column; }
   #notebox textarea { flex: 1; min-height: 40px; resize: vertical; }
-  #clock { flex: none; padding: 4px 0; font-size: 40px; line-height: 1.2; text-align: center; font-variant-numeric: tabular-nums; }
-  #info { font-size: 12px; text-align: center; opacity: .8; margin: 2px 0 6px; min-height: 30px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-  .row { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
-  #normal button { padding: 3px 10px; font-size: 12px; }
+  #topbar { display: flex; align-items: center; gap: 6px; height: 22px; font-size: 12px; opacity: .85; }
+  #topbar .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex: none; }
+  #ttitle { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #tshrink { border: 0; background: transparent; color: inherit; font-size: 14px; padding: 0 4px; opacity: .6; }
+  #tshrink:hover { opacity: 1; }
+  #clock { flex: none; padding: 2px 0; font-size: 44px; line-height: 1.15; text-align: center; font-variant-numeric: tabular-nums; }
+  #nprog { height: 4px; border-radius: 2px; margin: 4px 6px 8px; background: color-mix(in srgb, CanvasText 14%, transparent); overflow: hidden; flex: none; }
+  #nfill { height: 100%; width: 0; background: var(--accent); }
+  #info { font-size: 12px; text-align: center; opacity: .8; margin: 0 0 8px; min-height: 16px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  #normal .row button { padding: 0 14px; height: 28px; font-size: 12px; border-radius: 6px; border: .5px solid color-mix(in srgb, CanvasText 35%, transparent); background: transparent; color: CanvasText; }
+  #normal .row button:hover { background: color-mix(in srgb, CanvasText 8%, transparent); }
+  #normal .row button.primary { background: CanvasText; color: Canvas; border-color: CanvasText; }
+  #normal .row button.primary:hover { opacity: .85; }
 
   /* 迷你模式：无边框、透明背景、可拖动，悬停才出按钮 */
   #compact { display: none; position: relative; width: 100%; height: 100%; }
@@ -62,7 +72,9 @@
 </head>
 <body>
   <div id="normal">
+    <div id="topbar"><span class="dot"></span><span id="ttitle"></span><button id="tshrink" title="切换到迷你模式" aria-label="切换到迷你模式">⇄</button></div>
     <div id="clock">--:--</div>
+    <div id="nprog"><div id="nfill"></div></div>
     <div id="info"></div>
     <div id="notebox" style="display:none;margin-bottom:6px">
       <textarea id="notetext" rows="2" placeholder="这个番茄做了什么？（可留空，拖右下角或拉大窗口可以放大）" style="width:100%;box-sizing:border-box;font:inherit;font-size:12px"></textarea>
@@ -78,7 +90,6 @@
       <button id="tretry" style="display:none">重试写入</button>
       <button id="tdiscard" style="display:none">放弃</button>
       <button id="tclear" style="display:none" title="结束本次计时显示，已保存的番茄记录会保留">完成</button>
-      <button id="tshrink" title="切换到迷你模式" aria-label="切换到迷你模式">⇄</button>
     </div>
   </div>
 
@@ -156,7 +167,7 @@ function render() {
   const time = st ? TimerView.fmt(TimerView.remaining(st)) : ready ? TimerView.fmt(last.ms) : "--:--";
   $("clock").textContent = time;
   document.title = st && st.status !== "finished" ? `${time} 番茄钟` : "番茄钟";
-  $("info").textContent = st ? TimerView.info(st) : ready ? `准备开始：${last.task.title || "自由专注"}` : "没有计时（请在主窗口开始专注）";
+  $("info").textContent = st ? TimerView.info(st) : ready ? "准备开始" : "没有计时（请在主窗口开始专注）";
   $("tgo").style.display = ready ? "" : "none";
   const f = TimerView.flags(st);
   $("tpause").style.display = $("tend").style.display = f.canPause ? "" : "none";
@@ -176,7 +187,11 @@ function render() {
   $("tretry").style.display = f.canRetry ? "" : "none";
   $("tdiscard").style.display = f.canDiscard ? "" : "none";
   $("tclear").style.display = f.canClear ? "" : "none";
-  $("tshrink").style.display = f.canPause ? "" : "none";
+  $("tshrink").style.display = f.canPause || ready ? "" : "none";
+  $("ttitle").textContent = st ? st.task.title : ready ? last.task.title || "自由专注" : "";
+  // 当前最该点的按钮用实心突出
+  const primary = ready ? "tgo" : f.canClear ? "tclear" : f.canNext ? "tnext" : f.canRetry ? "tretry" : f.awaitingNote ? "notesave" : f.canPause ? "tpause" : null;
+  for (const b of document.querySelectorAll("#normal .row button")) b.classList.toggle("primary", b.id === primary);
 
   const p = progress();
   const isBreak = !!st && !!st.kind && st.kind !== "work";
@@ -192,7 +207,7 @@ function render() {
   // 准备开始时，迷你模式里的 ⏯ 变成 ▶（开始），⏹ 隐藏
   for (const b of document.querySelectorAll('#compact [data-act="pause"]')) { b.textContent = ready ? "▶" : "⏯"; b.title = ready ? "开始" : "暂停/继续"; }
   for (const b of document.querySelectorAll('#compact [data-act="end"]')) b.style.display = ready ? "none" : "";
-  $("bf").style.width = $("mf").style.width = `${p * 100}%`;
+  $("nfill").style.width = $("bf").style.width = $("mf").style.width = `${p * 100}%`;
   $("mt").textContent = time;
 }
 
