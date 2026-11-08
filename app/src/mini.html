@@ -27,6 +27,11 @@
   #normal .row button { padding: 0 14px; height: 28px; font-size: 12px; border-radius: 6px; border: .5px solid color-mix(in srgb, CanvasText 35%, transparent); background: transparent; color: CanvasText; }
   #normal .row button:hover { background: color-mix(in srgb, CanvasText 8%, transparent); }
   #normal .row button.primary { background: CanvasText; color: Canvas; border-color: CanvasText; }
+  /* 等备注时空间紧：缩小倒计时、收起进度条、三个按钮排一行 */
+  #normal.noting #clock { font-size: 30px; padding: 0; }
+  #normal.noting #nprog { display: none; }
+  #notebox .row { flex-wrap: nowrap; gap: 6px; }
+  #notebox .row button { padding: 0 8px; }
   #normal .row button.primary:hover { opacity: .85; }
 
   /* 迷你模式：无边框、透明背景、可拖动，悬停才出按钮 */
@@ -175,6 +180,7 @@ function render() {
   $("notebox").style.display = f.awaitingNote ? "flex" : "none";
   $("info").style.display = f.awaitingNote ? "none" : "";
   if (f.awaitingNote && !noteShown) setTimeout(() => $("notetext").focus(), 0);
+  $("normal").classList.toggle("noting", f.awaitingNote);
   noteShown = f.awaitingNote;
   $("tshort").style.display = $("tlong").style.display = f.canBreak ? "" : "none";
   // 休息写入记录后，直接在小窗里接续下一个番茄（沿用同一个任务和上次时长）
