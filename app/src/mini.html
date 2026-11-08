@@ -116,7 +116,7 @@ let applied = null;
 
 // 没有计时、或结束后还要处理（清除/重试/放弃）时，回到普通模式，因为迷你模式没有这些按钮
 function effectiveMode() {
-  const live = st && st.status !== "finished";
+  const live = (st && st.status !== "finished") || (!st && !!last);
   return live ? preferred : "normal";
 }
 function applyMode() {
@@ -188,7 +188,10 @@ function render() {
   );
   $("rt").textContent = time;
   $("bc").textContent = time;
-  $("bt").textContent = st ? st.task.title : "";
+  $("bt").textContent = st ? st.task.title : ready ? last.task.title || "自由专注" : "";
+  // 准备开始时，迷你模式里的 ⏯ 变成 ▶（开始），⏹ 隐藏
+  for (const b of document.querySelectorAll('#compact [data-act="pause"]')) { b.textContent = ready ? "▶" : "⏯"; b.title = ready ? "开始" : "暂停/继续"; }
+  for (const b of document.querySelectorAll('#compact [data-act="end"]')) b.style.display = ready ? "none" : "";
   $("bf").style.width = $("mf").style.width = `${p * 100}%`;
   $("mt").textContent = time;
 }
@@ -205,7 +208,9 @@ $("tshort").onclick = () => cmd("timer_start_break", { minutes: TimerView.breakM
 $("tlong").onclick = () => cmd("timer_start_break", { minutes: TimerView.breakMinutes(true), long: true, port: st.port });
 $("tretry").onclick = () => cmd("timer_retry", { port: st.port });
 $("tnext").onclick = () => cmd("timer_next_work", { minutes: null, port: st.port });
-$("tgo").onclick = () => cmd("timer_start", { task: last.task, minutes: last.ms / 60000, port: last.port });
+const startLast = () => cmd("timer_start", { task: last.task, minutes: last.ms / 60000, port: last.port });
+const pauseOrStart = () => (!st && last ? startLast() : cmd("timer_toggle_pause"));
+$("tgo").onclick = startLast;
 $("tclear").onclick = () => cmd("timer_clear");
 // 小窗口里系统自带的确认框会被截断，所以改成就地二次确认：第一次点变成“确定放弃？”，4 秒内再点才放弃
 let discardArm = null;
@@ -225,7 +230,7 @@ $("compact").addEventListener("click", (e) => {
   const b = e.target.closest("[data-act]");
   if (!b) return;
   const a = b.dataset.act;
-  if (a === "pause") cmd("timer_toggle_pause");
+  if (a === "pause") pauseOrStart();
   else if (a === "end") cmd("timer_end");
   else if (a === "cycle") {
     const i = STYLES.indexOf(preferred);
@@ -233,7 +238,7 @@ $("compact").addEventListener("click", (e) => {
   }
 });
 // 点圆环本体也能暂停/继续；双击切回普通模式
-$("ring").addEventListener("click", (e) => { if (!e.target.closest("button")) cmd("timer_toggle_pause"); });
+$("ring").addEventListener("click", (e) => { if (!e.target.closest("button")) pauseOrStart(); });
 $("compact").addEventListener("dblclick", (e) => { if (!e.target.closest("button")) setPreferred("normal"); });
 // 无边框窗口：在空白处按下鼠标拖动窗口
 document.body.addEventListener("mousedown", (e) => {
