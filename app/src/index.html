@@ -29,6 +29,15 @@
   #dot.on { background: var(--ok); }
   #status { flex: 1; min-width: 0; font-size: 13px; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #bar button { padding: 4px 10px; font-size: 12px; }
+  #upbanner { display: none; align-items: center; gap: 8px; padding: 7px 14px; background: var(--accent-bg); border-bottom: 1px solid var(--line); font-size: 12px; }
+  #upbanner.on { display: flex; }
+  #upbanner span { flex: 1; min-width: 0; }
+  #upbanner button { padding: 3px 10px; font-size: 12px; }
+  nav button .badge { display: none; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); position: absolute; margin: 2px 0 0 12px; }
+  nav button .badge.on { display: inline-block; }
+  #upnotes { white-space: pre-wrap; font-size: 12px; color: var(--sub); max-height: 140px; overflow-y: auto; padding: 8px 0; }
+  #upbar { height: 4px; border-radius: 2px; background: var(--track); overflow: hidden; margin: 6px 0; display: none; }
+  #upfill { height: 100%; width: 0; background: var(--accent); }
 
   main { flex: 1; min-height: 0; overflow-y: auto; }
   .page { display: none; padding: 16px 18px 20px; }
@@ -112,6 +121,8 @@
     <button id="kstop" style="display:none">停止内核</button>
     <button id="ui" title="用默认浏览器打开思源界面">打开思源界面</button>
   </div>
+
+  <div id="upbanner"><span id="uptext"></span><button id="upgo" class="primary">查看</button></div>
 
   <main>
     <section class="page on" id="p-timer">
@@ -215,6 +226,21 @@
         <div class="hint" style="padding:8px 0">间隔跟随思源「设置 → 关于 → 同步」里的自动同步间隔；同步本身由思源完成，本工具只负责按时触发。</div>
       </div>
 
+      <div class="sh">版本与更新</div>
+      <div class="sc">
+        <div class="sr"><span class="sl">当前版本<small id="upsub">每 6 小时自动检查 GitHub 发布</small></span><span id="upcur" style="font-variant-numeric:tabular-nums"></span></div>
+        <div class="sr col" id="uprow" style="display:none">
+          <div id="upline" style="font-weight:600"></div>
+          <div id="upnotes"></div>
+          <div id="upbar"><div id="upfill"></div></div>
+        </div>
+        <div class="sr end" style="gap:8px">
+          <button id="upcheck">检查更新</button>
+          <button id="updl" class="primary" style="display:none">下载</button>
+          <button id="upinst" class="primary" style="display:none">安装并重启</button>
+        </div>
+      </div>
+
       <div class="sh">支持作者</div>
       <div class="sc" style="padding:14px;text-align:center">
         <img src="donate.jpg" alt="微信打赏二维码" style="width:180px;height:auto;padding:10px;background:#fff;border-radius:8px">
@@ -227,7 +253,7 @@
   <nav>
     <button class="on" data-p="timer"><b>◔</b>计时</button>
     <button data-p="tasks"><b>☰</b>任务</button>
-    <button data-p="set"><b>⚙</b>设置</button>
+    <button data-p="set"><b>⚙</b>设置<i class="badge" id="upbadge"></i></button>
   </nav>
 
 <script src="common.js"></script>
@@ -509,6 +535,44 @@ const startBreak = (long) => {
 $("tshort").onclick = () => startBreak(false);
 $("tlong").onclick = () => startBreak(true);
 
+
+// ---- 版本更新：后台定时查 GitHub，有新版就在顶部和设置页提醒，可在软件内下载安装 ----
+let upState = null;
+function fmtMB(n) { return (n / 1048576).toFixed(1) + " MB"; }
+function renderUpdate() {
+  const u = upState; if (!u) return;
+  $("upcur").textContent = "v" + u.current;
+  const has = ["available", "downloading", "ready", "installing"].includes(u.status);
+  $("upbadge").classList.toggle("on", has);
+  $("upbanner").classList.toggle("on", has);
+  $("uptext").textContent = u.status === "ready" ? `新版本 ${u.latest} 已下载好，可以安装并重启`
+    : u.status === "downloading" ? `正在下载 ${u.latest}…`
+    : u.status === "installing" ? "正在安装，马上重启…"
+    : `发现新版本 ${u.latest}（当前 v${u.current}）`;
+  $("uprow").style.display = has ? "" : "none";
+  $("upline").textContent = has ? `${u.latest}${u.size ? "（" + fmtMB(u.size) + "）" : ""}` : "";
+  $("upnotes").textContent = u.notes || "";
+  const dl = u.status === "downloading";
+  $("upbar").style.display = dl ? "block" : "none";
+  $("upfill").style.width = u.size ? `${Math.min(100, u.downloaded / u.size * 100)}%` : "0";
+  $("updl").style.display = u.status === "available" ? "" : "none";
+  $("updl").textContent = "下载" + (u.size ? "（" + fmtMB(u.size) + "）" : "");
+  $("upinst").style.display = u.status === "ready" ? "" : "none";
+  $("upcheck").disabled = ["checking", "downloading", "installing"].includes(u.status);
+  $("upcheck").textContent = u.status === "checking" ? "检查中…" : "检查更新";
+  $("upsub").textContent = u.error ? u.error
+    : u.status === "idle" && u.checked_at ? `已是最新版本（${new Date(u.checked_at).toLocaleTimeString()} 检查）`
+    : "每 6 小时自动检查 GitHub 发布";
+  $("upsub").style.color = u.error ? "var(--bad)" : "";
+  if (!u.can_install && has) $("upsub").textContent = "开发版只检查，不自动安装";
+}
+async function loadUpdate() { try { upState = await invoke("update_get"); } catch {} renderUpdate(); }
+$("upcheck").onclick = () => cmd("update_check");
+$("updl").onclick = () => cmd("update_download");
+$("upinst").onclick = () => cmd("update_install");
+$("upgo").onclick = () => { show("set"); document.querySelector("main").scrollTop = $("upcheck").offsetTop; };
+window.__TAURI__.event.listen("update-changed", (e) => { upState = e.payload; renderUpdate(); });
+loadUpdate();
 window.__TAURI__.event.listen("timer-changed", loadTimer);
 window.__TAURI__.event.listen("sync-changed", () => { refreshSync(); });
 setInterval(renderClock, 250);

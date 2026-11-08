@@ -291,6 +291,7 @@ async fn search_tasks(
 mod notes;
 mod sync;
 mod timer;
+mod updater;
 mod micro_break;
 mod single_instance;
 
@@ -386,6 +387,7 @@ fn main() {
             timer::init(app)?;
             micro_break::init(app);
             sync::init(app)?;
+            updater::init(app)?;
             init_tray(app)?;
             // 开机自启时带 --hidden：只进托盘，不弹主窗口
             if std::env::args().any(|a| a == "--hidden") {
@@ -431,6 +433,10 @@ fn main() {
             timer::set_mini_mode,
             sync::sync_status,
             sync::sync_now,
+            updater::update_get,
+            updater::update_check,
+            updater::update_download,
+            updater::update_install,
             micro_break::micro_break_get,
             micro_break::micro_break_dismiss
         ])
