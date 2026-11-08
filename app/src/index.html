@@ -320,14 +320,7 @@ $("done").onchange = searchTasks;
 // ---- 番茄钟：计时和状态都在后端，这里只是视图（迷你窗口读同一份状态） ----
 let timerState = null;
 async function loadTimer() {
-  const prev = timerState;
   try { timerState = await invoke("timer_get"); } catch (e) { say(String(e), false); }
-  if (prev && !timerState) {
-    // 计时被清除（点“完成”）：回到上一个任务的计时开始前，任务保留，时长恢复为专注时长
-    if (!selectedTask && prev.task && prev.task.id) { selectedTask = { id: prev.task.id, title: prev.task.title, block_id: prev.task.block_id }; renderTaskCard(); }
-    if (prev.work_ms > 0) { $("minutes").value = Math.round(prev.work_ms / 600) / 100; syncChips(); }
-    show("timer");
-  }
   renderClock();
 }
 let noteShown = false;

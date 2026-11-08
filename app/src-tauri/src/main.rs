@@ -326,11 +326,6 @@ fn autostart_set(enabled: bool) -> Result<(), String> {
     }
 }
 
-#[tauri::command]
-fn show_main_window(app: tauri::AppHandle) {
-    show_main(&app);
-}
-
 fn show_main(app: &tauri::AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.show();
@@ -426,7 +421,6 @@ fn main() {
             timer::timer_submit_note,
             timer::timer_retry,
             timer::timer_clear,
-            show_main_window,
             timer::timer_discard,
             autostart_get,
             autostart_set,
