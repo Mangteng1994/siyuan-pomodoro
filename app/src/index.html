@@ -36,8 +36,8 @@
   #newbanner { background: var(--card); }
   .cl { padding: 6px 0; border-top: 1px solid var(--line); }
   .cl:first-child { border-top: 0; }
-  .cl summary { cursor: pointer; font-size: 13px; font-weight: 600; }
-  .cl summary small { font-weight: 400; color: var(--sub); margin-left: 6px; }
+  .clh { font-size: 13px; font-weight: 600; }
+  .clh small { font-weight: 400; color: var(--sub); margin-left: 6px; }
   .cl pre { white-space: pre-wrap; font: inherit; font-size: 12px; color: var(--sub); margin: 6px 0 2px; }
   nav button .badge { display: none; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); position: absolute; margin: 2px 0 0 12px; }
   nav button .badge.on { display: inline-block; }
@@ -589,12 +589,12 @@ async function loadChangelog() {
   try { changelog = await invoke("changelog_get"); } catch { return; }
   const list = $("cllist"); list.replaceChildren();
   const cur = (upState && upState.current) || "";
-  for (const e of changelog) {
-    const d = document.createElement("details"); d.className = "cl";
-    d.open = e.version === cur || (e.version === "未发布" && !changelog.some((x) => x.version === cur));
-    const sm = document.createElement("summary");
-    sm.textContent = e.version === "未发布" ? "未发布" : "v" + e.version;
-    if (e.version === cur) sm.textContent += "（当前版本）";
+  // 只展示当前版本；日志里还没有当前版本时（比如开发版）退回最上面一条
+  const e = changelog.find((x) => x.version === cur) || changelog[0];
+  if (e) {
+    const d = document.createElement("div"); d.className = "cl";
+    const sm = document.createElement("div"); sm.className = "clh";
+    sm.textContent = e.version === "未发布" ? "未发布" : "v" + e.version + " 更新内容";
     if (e.date) { const t = document.createElement("small"); t.textContent = e.date; sm.append(t); }
     const pre = document.createElement("pre"); pre.textContent = e.notes;
     d.append(sm, pre); list.append(d);
