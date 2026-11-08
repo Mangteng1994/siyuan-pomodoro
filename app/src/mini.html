@@ -44,7 +44,7 @@
   body.compact #compact { display: block; }
   .cbtn { border: 0; border-radius: 6px; background: rgba(255,255,255,.92); color: #2f2f2f; padding: 0; line-height: 1; display: inline-flex; align-items: center; justify-content: center; }
   .acts { display: none; gap: 3px; align-items: center; }
-  #compact:hover .acts { display: flex; }
+  #compact.hov .acts { display: flex; }
 
   /* 圆环 */
   #ring { display: none; position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(from -90deg, var(--accent) var(--deg, 0deg), var(--track) var(--deg, 0deg)); }
@@ -54,7 +54,7 @@
   #ring .cbtn { width: 20px; height: 20px; font-size: 11px; background: var(--btn); color: var(--fg); }
   body.m-ring #ring { display: block; }
   #ring .cycle { position: absolute; top: -2px; right: -2px; width: 14px; height: 14px; font-size: 9px; display: none; z-index: 3; }
-  body.m-ring #compact:hover .cycle { display: inline-flex; }
+  body.m-ring #compact.hov .cycle { display: inline-flex; }
 
   /* 横向进度条 */
   #bar { display: none; position: absolute; inset: 0; background: var(--bg); padding: 3px 8px 5px; box-sizing: border-box; flex-direction: column; justify-content: space-between; }
@@ -264,9 +264,18 @@ $("compact").addEventListener("dblclick", (e) => { if (!e.target.closest("button
 // 无边框窗口：在空白处按下鼠标拖动窗口
 document.body.addEventListener("mousedown", (e) => {
   if (e.button === 0 && applied !== "normal" && !e.target.closest("button")) {
+    // 拖动期间系统接管鼠标，松手后不会再收到 mouseleave，:hover 会一直卡住；
+    // 所以悬停状态改由脚本控制，开始拖动就收起按钮，等鼠标在窗口里再动一下才重新显示
+    setHover(false);
     window.__TAURI__.window.getCurrentWindow().startDragging().catch(() => {});
   }
 });
+// 迷你模式的悬停：鼠标在窗口里移动才显示按钮，离开、窗口失焦或开始拖动就收起
+const compactEl = document.getElementById("compact");
+function setHover(on) { compactEl.classList.toggle("hov", on); }
+compactEl.addEventListener("mousemove", (e) => { if (e.buttons === 0) setHover(true); });
+compactEl.addEventListener("mouseleave", () => setHover(false));
+window.addEventListener("blur", () => setHover(false));
 
 window.__TAURI__.event.listen("timer-changed", load);
 setInterval(render, 250);
