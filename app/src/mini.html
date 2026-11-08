@@ -139,6 +139,7 @@ function applyMode() {
   const m = effectiveMode();
   if (m === applied) return;
   applied = m;
+  if (typeof setHover === "function") setHover(false); // 窗口要换尺寸，先收起悬停按钮
   document.body.classList.toggle("compact", m !== "normal");
   document.documentElement.classList.toggle("compact", m !== "normal");
   for (const s of STYLES) document.body.classList.toggle("m-" + s, m === s);
@@ -272,8 +273,17 @@ document.body.addEventListener("mousedown", (e) => {
 });
 // 迷你模式的悬停：鼠标在窗口里移动才显示按钮，离开、窗口失焦或开始拖动就收起
 const compactEl = document.getElementById("compact");
-function setHover(on) { compactEl.classList.toggle("hov", on); }
-compactEl.addEventListener("mousemove", (e) => { if (e.buttons === 0) setHover(true); });
+let hovTimer = null;
+function setHover(on) {
+  compactEl.classList.toggle("hov", on);
+  clearTimeout(hovTimer);
+}
+// 鼠标停住超过 1.2 秒就收起（鼠标压在按钮上时不收），防止窗口尺寸变化后收不到 mouseleave 而一直停着
+compactEl.addEventListener("mousemove", (e) => {
+  if (e.buttons !== 0) return;
+  setHover(true);
+  if (!e.target.closest("button")) hovTimer = setTimeout(() => setHover(false), 1200);
+});
 compactEl.addEventListener("mouseleave", () => setHover(false));
 window.addEventListener("blur", () => setHover(false));
 
