@@ -55,9 +55,9 @@
   pwsh -File .\scripts\build-release.ps1
   ```
 
-  产物在 `dist/`：单 exe 加 `SHA256SUMS-v版本号.txt`。发布前确认依赖列表里没有 `WebView2Loader.dll`。
+  产物在 `dist/`：单 exe 加 `SHA256SUMS.txt`（文件名固定，不带版本号）。发布前确认依赖列表里没有 `WebView2Loader.dll`。
 - **推送、重建 exe、发布 Release 都要用户明确说了才做**，不要主动推送。批准只对这一次有效。
-- Release 资产命名固定为 `siyuan-pomodoro-v版本号-windows-x64.exe`，软件内更新靠结尾的 `windows-x64.exe` 找安装包，并用 GitHub 给的 SHA-256 校验，改命名会让更新失效。
+- Release 资产文件名固定为 `siyuan-pomodoro-windows-x64.exe`（不带版本号，版本看 tag；这样 `releases/latest/download/siyuan-pomodoro-windows-x64.exe` 永远指向最新版）。v0.1.8 及更早的资产带版本号，不动。软件内更新靠结尾的 `windows-x64.exe` 找安装包，并用 GitHub 给的 SHA-256 校验，改命名会让更新失效。
 - 代码里的注释和提交说明都用中文，提交信息第一行写清楚改了什么，结尾带用户给定的署名行。
 
 ## 沟通

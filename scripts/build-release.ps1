@@ -42,17 +42,17 @@ try {
     $version = (Get-Content -LiteralPath 'tauri.conf.json' -Raw | ConvertFrom-Json).version
     $distDir = Join-Path $projectRoot 'dist'
     New-Item -ItemType Directory -Force -Path $distDir | Out-Null
-    $exeName = "siyuan-pomodoro-v$version-windows-x64.exe"
+    $exeName = "siyuan-pomodoro-windows-x64.exe"  # 固定文件名，不带版本号；软件内更新按结尾 windows-x64.exe 找安装包
     $outputPath = Join-Path $distDir $exeName
     Copy-Item -LiteralPath $sourceExe -Destination $outputPath
     $hashValue = (Get-FileHash -LiteralPath $outputPath -Algorithm SHA256).Hash
-    $checksumPath = Join-Path $distDir "SHA256SUMS-v$version.txt"
+    $checksumPath = Join-Path $distDir "SHA256SUMS.txt"
     [System.IO.File]::WriteAllText($checksumPath, "$hashValue  $exeName`n", [System.Text.UTF8Encoding]::new($false))
     # Release 说明从 CHANGELOG.md 取当前版本那一段，写到 dist/ 里，发布时用 gh release create --notes-file
     $changelog = Get-Content -LiteralPath (Join-Path $projectRoot 'CHANGELOG.md') -Raw -Encoding UTF8
     $section = [regex]::Match($changelog, "(?ms)^## v$([regex]::Escape($version))\b[^\r\n]*\r?\n(.*?)(?=^## |\z)")
     if (!$section.Success) { throw "CHANGELOG.md 里没有 v$version 的段落：请先把“## 未发布”改成“## v$version · 日期”再打包。" }
-    $notes = "# 思源番茄钟 v$version`n`n" + $section.Groups[1].Value.Trim() + "`n`n---`n下载 ``$exeName`` 直接运行，系统需安装 WebView2 Runtime。已安装旧版的话，可在软件“设置 → 版本与更新”里直接更新。可用 ``SHA256SUMS-v$version.txt`` 核对下载文件。`n"
+    $notes = "# 思源番茄钟 v$version`n`n" + $section.Groups[1].Value.Trim() + "`n`n---`n下载 ``$exeName`` 直接运行，系统需安装 WebView2 Runtime。已安装旧版的话，可在软件“设置 → 版本与更新”里直接更新。可用 ``SHA256SUMS.txt`` 核对下载文件。`n"
     $notesPath = Join-Path $distDir "release-notes-v$version.md"
     [System.IO.File]::WriteAllText($notesPath, $notes, [System.Text.UTF8Encoding]::new($false))
     Write-Output "发布说明：$notesPath"

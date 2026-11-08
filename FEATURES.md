@@ -6,7 +6,7 @@
 
 状态：`待做` / `进行中` / `完成` / `已验证`（已验证 = 在测试空间实测通过）
 
-当前发布版本为 v0.1.8。Windows x64 下载 `siyuan-pomodoro-v0.1.8-windows-x64.exe` 后可直接运行。本次替换了设置页底部的微信打赏二维码。各版本更新内容见 `CHANGELOG.md`。
+当前发布版本为 v0.1.8。Windows x64 下载 `siyuan-pomodoro-v0.1.8-windows-x64.exe` 后可直接运行；从下一版起安装包统一为不带版本号的固定文件名 `siyuan-pomodoro-windows-x64.exe`。本次替换了设置页底部的微信打赏二维码。各版本更新内容见 `CHANGELOG.md`。
 
 ## 固定构建与发布约定
 

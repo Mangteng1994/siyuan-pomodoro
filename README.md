@@ -4,7 +4,7 @@
 
 ## 下载与使用
 
-从 [Releases](https://github.com/Mangteng1994/siyuan-pomodoro/releases) 下载 `siyuan-pomodoro-v0.1.8-windows-x64.exe`，直接运行。
+从 [Releases](https://github.com/Mangteng1994/siyuan-pomodoro/releases) 下载最新版的 `siyuan-pomodoro-windows-x64.exe`（v0.1.8 及更早版本的文件名带版本号），直接运行。
 
 **发布采用与早期单文件版本一致的单 exe 方案：通过 MSVC 静态链接 WebView2 加载器，无需下载或在 exe 旁放置 `WebView2Loader.dll`，无需解压双文件 ZIP。** 系统仍需安装 Microsoft Edge WebView2 Runtime；加载器静态链接不等于将整个浏览器运行时打入 exe。
 
@@ -24,4 +24,4 @@ pwsh -File .\scripts\build-release.ps1
 
 脚本默认使用 `$env:USERPROFILE\.rustup\toolchains\stable-x86_64-pc-windows-msvc\bin`；其他安装位置可用 `-ToolchainBin` 指定。脚本检查工具链类型，使用锁定依赖离线编译，并仅从 `app/src-tauri/target/x86_64-pc-windows-msvc/release/` 取产物。首次在其他电脑构建时，需先准备依赖缓存、MSVC C++ 构建工具和 Windows SDK。
 
-产物位于 `dist/`：版本化单 exe 和 `SHA256SUMS-v版本号.txt`。Release 上传这两个文件，发布前检查 exe 的依赖列表中没有 `WebView2Loader.dll`；不发布 GNU exe 或双文件 ZIP。当前工作约定为不主动运行测试，编译和依赖检查不代表功能实测。
+产物位于 `dist/`：单 exe `siyuan-pomodoro-windows-x64.exe`（文件名固定，不带版本号）和 `SHA256SUMS.txt`。Release 上传这两个文件，发布前检查 exe 的依赖列表中没有 `WebView2Loader.dll`；不发布 GNU exe 或双文件 ZIP。当前工作约定为不主动运行测试，编译和依赖检查不代表功能实测。
