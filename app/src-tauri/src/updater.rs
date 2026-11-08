@@ -386,6 +386,43 @@ pub fn update_install(app: AppHandle, state: State<Handle>) -> Result<(), String
     Ok(())
 }
 
+/// 更新日志（和仓库根目录的 CHANGELOG.md 同一份，编译时打进 exe，离线也能看）
+const CHANGELOG: &str = include_str!("../../../CHANGELOG.md");
+
+#[derive(Serialize, PartialEq, Debug)]
+pub struct ChangeEntry {
+    /// "0.1.8"，未发布的写成 "未发布"
+    pub version: String,
+    pub date: String,
+    pub notes: String,
+}
+
+fn parse_changelog(text: &str) -> Vec<ChangeEntry> {
+    let mut out: Vec<ChangeEntry> = Vec::new();
+    for line in text.lines() {
+        if let Some(head) = line.strip_prefix("## ") {
+            let (v, d) = head.split_once('·').map(|(a, b)| (a, b.trim())).unwrap_or((head, ""));
+            out.push(ChangeEntry {
+                version: v.trim().trim_start_matches('v').to_string(),
+                date: d.to_string(),
+                notes: String::new(),
+            });
+        } else if let Some(last) = out.last_mut() {
+            last.notes.push_str(line);
+            last.notes.push('\n');
+        }
+    }
+    for e in &mut out {
+        e.notes = e.notes.trim().to_string();
+    }
+    out
+}
+
+#[tauri::command]
+pub fn changelog_get() -> Vec<ChangeEntry> {
+    parse_changelog(CHANGELOG)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -416,6 +453,20 @@ mod tests {
         assert_eq!(st.asset_url, "https://x/a.exe");
         assert_eq!(st.sha256.as_deref(), Some("abcd"));
         assert_eq!(st.sums_url.as_deref(), Some("https://x/sums"));
+    }
+
+    #[test]
+    fn parses_changelog() {
+        let list = parse_changelog("# 更新日志\n说明\n\n## 未发布\n\n- 甲\n\n## v0.1.8 · 2026-11-07\n\n- 乙\n- 丙\n");
+        assert_eq!(list.len(), 2);
+        assert_eq!(list[0].version, "未发布");
+        assert_eq!(list[0].notes, "- 甲");
+        assert_eq!(list[1].version, "0.1.8");
+        assert_eq!(list[1].date, "2026-11-07");
+        assert_eq!(list[1].notes, "- 乙\n- 丙");
+        // 仓库里真实的日志必须能解析出当前版本
+        let real = changelog_get();
+        assert!(real.iter().any(|e| e.version == "0.1.8"));
     }
 
     #[test]

@@ -29,10 +29,16 @@
   #dot.on { background: var(--ok); }
   #status { flex: 1; min-width: 0; font-size: 13px; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #bar button { padding: 4px 10px; font-size: 12px; }
-  #upbanner { display: none; align-items: center; gap: 8px; padding: 7px 14px; background: var(--accent-bg); border-bottom: 1px solid var(--line); font-size: 12px; }
-  #upbanner.on { display: flex; }
-  #upbanner span { flex: 1; min-width: 0; }
-  #upbanner button { padding: 3px 10px; font-size: 12px; }
+  #upbanner, #newbanner { display: none; align-items: center; gap: 8px; padding: 7px 14px; background: var(--accent-bg); border-bottom: 1px solid var(--line); font-size: 12px; }
+  #upbanner.on, #newbanner.on { display: flex; }
+  #upbanner span, #newbanner span { flex: 1; min-width: 0; }
+  #upbanner button, #newbanner button { padding: 3px 10px; font-size: 12px; }
+  #newbanner { background: var(--card); }
+  .cl { padding: 6px 0; border-top: 1px solid var(--line); }
+  .cl:first-child { border-top: 0; }
+  .cl summary { cursor: pointer; font-size: 13px; font-weight: 600; }
+  .cl summary small { font-weight: 400; color: var(--sub); margin-left: 6px; }
+  .cl pre { white-space: pre-wrap; font: inherit; font-size: 12px; color: var(--sub); margin: 6px 0 2px; }
   nav button .badge { display: none; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); position: absolute; margin: 2px 0 0 12px; }
   nav button .badge.on { display: inline-block; }
   #upnotes { white-space: pre-wrap; font-size: 12px; color: var(--sub); max-height: 140px; overflow-y: auto; padding: 8px 0; }
@@ -122,6 +128,7 @@
     <button id="ui" title="用默认浏览器打开思源界面">打开思源界面</button>
   </div>
 
+  <div id="newbanner"><span id="newtext"></span><button id="newgo">看看</button><button id="newx" class="ghost" aria-label="关闭">×</button></div>
   <div id="upbanner"><span id="uptext"></span><button id="upgo" class="primary">查看</button></div>
 
   <main>
@@ -234,7 +241,9 @@
           <div id="upnotes"></div>
           <div id="upbar"><div id="upfill"></div></div>
         </div>
+        <div class="sr col" id="clrow" style="display:none"><div id="cllist"></div></div>
         <div class="sr end" style="gap:8px">
+          <button id="clbtn" class="ghost">更新内容</button>
           <button id="upcheck">检查更新</button>
           <button id="updl" class="primary" style="display:none">下载</button>
           <button id="upinst" class="primary" style="display:none">安装并重启</button>
@@ -572,7 +581,45 @@ $("updl").onclick = () => cmd("update_download");
 $("upinst").onclick = () => cmd("update_install");
 $("upgo").onclick = () => { show("set"); document.querySelector("main").scrollTop = $("upcheck").offsetTop; };
 window.__TAURI__.event.listen("update-changed", (e) => { upState = e.payload; renderUpdate(); });
-loadUpdate();
+loadUpdate().then(loadChangelog);
+
+// ---- 更新内容：CHANGELOG.md 打进了 exe；升级后第一次打开提示一次 ----
+let changelog = [];
+async function loadChangelog() {
+  try { changelog = await invoke("changelog_get"); } catch { return; }
+  const list = $("cllist"); list.replaceChildren();
+  const cur = (upState && upState.current) || "";
+  for (const e of changelog) {
+    const d = document.createElement("details"); d.className = "cl";
+    d.open = e.version === cur || (e.version === "未发布" && !changelog.some((x) => x.version === cur));
+    const sm = document.createElement("summary");
+    sm.textContent = e.version === "未发布" ? "未发布" : "v" + e.version;
+    if (e.version === cur) sm.textContent += "（当前版本）";
+    if (e.date) { const t = document.createElement("small"); t.textContent = e.date; sm.append(t); }
+    const pre = document.createElement("pre"); pre.textContent = e.notes;
+    d.append(sm, pre); list.append(d);
+  }
+  // 升级后第一次打开：提示一次（第一次安装不提示）
+  try {
+    const seen = localStorage.getItem("seenVersion");
+    if (cur && seen && seen !== cur && changelog.some((e) => e.version === cur)) {
+      $("newtext").textContent = `已更新到 v${cur}，看看这个版本有什么新内容`;
+      $("newbanner").classList.add("on");
+    }
+    if (cur) localStorage.setItem("seenVersion", cur);
+  } catch {}
+}
+function showChangelog() {
+  show("set"); $("clrow").style.display = ""; $("clbtn").textContent = "收起更新内容";
+  document.querySelector("main").scrollTop = $("clrow").offsetTop;
+}
+$("clbtn").onclick = () => {
+  const open = $("clrow").style.display !== "none";
+  $("clrow").style.display = open ? "none" : "";
+  $("clbtn").textContent = open ? "更新内容" : "收起更新内容";
+};
+$("newgo").onclick = () => { showChangelog(); $("newbanner").classList.remove("on"); };
+$("newx").onclick = () => $("newbanner").classList.remove("on");
 window.__TAURI__.event.listen("timer-changed", loadTimer);
 window.__TAURI__.event.listen("sync-changed", () => { refreshSync(); });
 setInterval(renderClock, 250);

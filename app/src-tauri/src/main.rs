@@ -437,6 +437,7 @@ fn main() {
             updater::update_check,
             updater::update_download,
             updater::update_install,
+            updater::changelog_get,
             micro_break::micro_break_get,
             micro_break::micro_break_dismiss
         ])
