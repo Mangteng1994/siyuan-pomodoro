@@ -192,7 +192,10 @@ $("tshort").onclick = () => cmd("timer_start_break", { minutes: TimerView.breakM
 $("tlong").onclick = () => cmd("timer_start_break", { minutes: TimerView.breakMinutes(true), long: true, port: st.port });
 $("tretry").onclick = () => cmd("timer_retry", { port: st.port });
 $("tnext").onclick = () => cmd("timer_next_work", { minutes: null, port: st.port });
-$("tclear").onclick = () => cmd("timer_clear");
+// 点完成：清掉计时后切到主窗口的计时页，停在上一个任务的开始前
+$("tclear").onclick = async () => {
+  try { await invoke("timer_clear"); await invoke("show_main_window"); } catch (e) { $("info").textContent = String(e); }
+};
 // 小窗口里系统自带的确认框会被截断，所以改成就地二次确认：第一次点变成“确定放弃？”，4 秒内再点才放弃
 let discardArm = null;
 $("tdiscard").onclick = () => {
