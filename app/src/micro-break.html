@@ -4,22 +4,43 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>微休息</title>
 <style>
-  :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
-  body { text-align: center; padding: 12px; margin: 0; }
-  h2 { margin: 8px 0; font-size: 19px; }
-  #seconds { font-size: 42px; font-variant-numeric: tabular-nums; color: #39896c; }
-  p { margin: 8px 0 16px; font-size: 13px; opacity: .75; }
-  button { font: inherit; cursor: pointer; padding: 6px 18px; border-radius: 8px; }
+  :root { color-scheme: light dark; font-family: "Microsoft YaHei UI", system-ui, sans-serif; --bg: #f6f6f4; --fg: #1f1f1e; --sub: #6b6b68; --line: rgba(0,0,0,.1); --track: rgba(128,128,128,.22); --ok: #39896c; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #1c1c1b; --fg: #ececea; --sub: #a3a3a0; --line: rgba(255,255,255,.12); --ok: #5fc29a; } }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--bg); color: var(--fg); box-sizing: border-box; padding: 14px 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; user-select: none; }
+  h2 { margin: 0 0 4px; font-size: 15px; font-weight: 500; }
+  .ring { position: relative; width: 104px; height: 104px; }
+  .ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .ring circle { fill: none; stroke-width: 6; }
+  #track { stroke: var(--track); }
+  #prog { stroke: var(--ok); stroke-linecap: round; stroke-dasharray: 301.6; stroke-dashoffset: 0; transition: stroke-dashoffset .9s linear; }
+  .num { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; font-variant-numeric: tabular-nums; }
+  #seconds { font-size: 30px; line-height: 1.1; }
+  #unit { font-size: 11px; color: var(--sub); }
+  p { margin: 6px 0 10px; font-size: 12px; color: var(--sub); }
+  button { font: inherit; font-size: 12px; color: inherit; cursor: pointer; padding: 5px 16px; border-radius: 8px; border: 1px solid var(--line); background: transparent; }
+  button:hover { border-color: var(--sub); }
 </style>
-<h2>让眼睛和身体休息一下</h2>
-<div id="seconds">…</div>
+<h2>放松一下眼睛</h2>
+<div class="ring">
+  <svg viewBox="0 0 110 110"><circle id="track" cx="55" cy="55" r="48"/><circle id="prog" cx="55" cy="55" r="48"/></svg>
+  <div class="num"><span id="seconds">…</span><span id="unit"></span></div>
+</div>
 <p>看看远处，放松肩颈。专注计时继续。</p>
 <button id="dismiss">跳过本次</button>
 <script>
 const { invoke } = window.__TAURI__.core;
-const render = (s) => { document.getElementById('seconds').textContent = s.active ? `${s.remaining_seconds} 秒` : '微休息已结束'; };
+const $ = (id) => document.getElementById(id);
+let total = 0;
+const render = (s) => {
+  if (!s.active) { $('seconds').textContent = '已结束'; $('unit').textContent = ''; $('prog').style.strokeDashoffset = 301.6; total = 0; return; }
+  total = Math.max(total, s.remaining_seconds);
+  $('seconds').textContent = s.remaining_seconds;
+  $('unit').textContent = '秒';
+  $('prog').style.strokeDashoffset = 301.6 * (1 - s.remaining_seconds / total);
+};
 window.__TAURI__.event.listen('micro-break-changed', (event) => render(event.payload));
 invoke('micro_break_get').then(render);
-document.getElementById('dismiss').onclick = () => invoke('micro_break_dismiss');
+$('dismiss').onclick = () => invoke('micro_break_dismiss');
 </script>
 </html>

@@ -84,6 +84,24 @@
   .f label { display: block; font-size: 12px; color: var(--sub); margin-bottom: 4px; }
   .inl { display: flex; gap: 10px; align-items: center; }
   .inl > div { flex: 1; }
+  /* 设置页：分组卡片，一行一项 */
+  .sh { font-size: 12px; color: var(--sub); margin: 18px 4px 6px; letter-spacing: .04em; }
+  .sh:first-child { margin-top: 0; }
+  .sc { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 2px 14px; }
+  .sr { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); font-size: 13px; margin: 0; }
+  .sr:first-child { border-top: 0; }
+  .sr.col { flex-direction: column; align-items: stretch; gap: 6px; }
+  .sr.end { justify-content: flex-end; }
+  .sl small { display: block; font-size: 11px; color: var(--sub); margin-top: 2px; font-weight: 400; }
+  .hint { font-size: 12px; color: var(--sub); }
+  #synconow { white-space: nowrap; flex: none; }
+  #syncinfo { flex: 1; min-width: 0; }
+  .sc input.sn { width: 64px; text-align: center; padding: 5px 6px; flex: none; }
+  .pair { display: flex; align-items: center; gap: 6px; color: var(--sub); }
+  input.sw { appearance: none; -webkit-appearance: none; width: 34px !important; height: 20px; border-radius: 10px; background: var(--track); border: 0; padding: 0; position: relative; flex: none; cursor: pointer; transition: background .15s; }
+  input.sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .15s; }
+  input.sw:checked { background: var(--accent); }
+  input.sw:checked::after { transform: translateX(14px); }
 </style>
 </head>
 <body>
@@ -163,44 +181,44 @@
     </section>
 
     <section class="page" id="p-set">
-      <h3>内核</h3>
-      <div class="f"><label>内核程序路径</label><input id="kernel_path" type="text"></div>
-      <div class="f"><label>工作空间</label><input id="workspace" type="text" placeholder="例如 C:\SiYuanData"></div>
-      <div class="f"><label>端口</label><input id="port" type="number" min="1" max="65535" style="width:120px"></div>
-      <div class="f"><label>API token（内核设了访问授权码时必填）</label><input id="api_token" type="password" autocomplete="off" placeholder="思源 设置 → 关于 → API token"></div>
-      <h3>启动</h3>
-      <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--fg);margin:0"><input id="autostart" type="checkbox" style="width:auto">开机自动启动（只进托盘，不弹窗口）</label>
-      <h3>休息时长（分钟）</h3>
-      <div class="inl">
-        <div><label style="font-size:12px;color:var(--sub)">短休息</label><input id="bshort" type="number" min="0.1" step="any"></div>
-        <div><label style="font-size:12px;color:var(--sub)">长休息</label><input id="blong" type="number" min="0.1" step="any"></div>
+      <div class="sh">内核</div>
+      <div class="sc">
+        <div class="sr col"><span class="sl">内核程序路径</span><input id="kernel_path" type="text"></div>
+        <div class="sr col"><span class="sl">工作空间</span><input id="workspace" type="text" placeholder="例如 C:\SiYuanData"></div>
+        <div class="sr"><span class="sl">端口</span><input id="port" type="number" min="1" max="65535" class="sn"></div>
+        <div class="sr col"><span class="sl">API token<small>内核设了访问授权码时必填</small></span><input id="api_token" type="password" autocomplete="off" placeholder="思源 设置 → 关于 → API token"></div>
       </div>
-      <h3>随机微休息</h3>
-      <label><input id="micro_enabled" type="checkbox">启用随机微休息</label>
-      <div class="inl">
-        <div><label>最小间隔（分钟）</label><input id="micro_min" type="number" min="0.1" max="1440" step="0.1" value="3"></div>
-        <div><label>最大间隔（分钟）</label><input id="micro_max" type="number" min="0.1" max="1440" step="0.1" value="5"></div>
+
+      <div class="sh">通用</div>
+      <div class="sc">
+        <label class="sr"><span class="sl">开机自动启动<small>只进托盘，不弹窗口</small></span><input id="autostart" type="checkbox" class="sw"></label>
+        <div class="sr"><span class="sl">短休息（分钟）</span><input id="bshort" type="number" min="0.1" step="any" class="sn"></div>
+        <div class="sr"><span class="sl">长休息（分钟）</span><input id="blong" type="number" min="0.1" step="any" class="sn"></div>
       </div>
-      <div class="f"><label>每次休息（秒）</label><input id="micro_seconds" type="number" min="1" max="3600" step="1" value="10"></div>
-      <div style="display:flex;gap:16px;margin:8px 0">
-        <label><input id="micro_popup" type="checkbox" checked>弹窗提醒</label>
-        <label><input id="micro_sound" type="checkbox" checked>开始和结束提示音</label>
+
+      <div class="sh">随机微休息</div>
+      <div class="sc">
+        <label class="sr"><span class="sl">启用<small>仅专注运行时随机提醒，暂停时停止，不写入番茄记录</small></span><input id="micro_enabled" type="checkbox" class="sw"></label>
+        <div class="sr"><span class="sl">间隔（分钟）</span><span class="pair"><input id="micro_min" type="number" min="0.1" max="1440" step="0.1" value="3" class="sn" aria-label="最小间隔"><span>–</span><input id="micro_max" type="number" min="0.1" max="1440" step="0.1" value="5" class="sn" aria-label="最大间隔"></span></div>
+        <div class="sr"><span class="sl">每次时长（秒）</span><input id="micro_seconds" type="number" min="1" max="3600" step="1" value="10" class="sn"></div>
+        <label class="sr"><span class="sl">弹窗提醒</span><input id="micro_popup" type="checkbox" class="sw" checked></label>
+        <label class="sr"><span class="sl">开始和结束提示音</span><input id="micro_sound" type="checkbox" class="sw" checked></label>
+        <div class="sr end"><button id="micro_save">保存</button></div>
       </div>
-      <button id="micro_save">保存微休息设置</button>
-      <p style="font-size:12px;color:var(--sub)">仅在专注运行时随机提醒，暂停时停止，专注倒计时继续；微休息不写入番茄记录。关闭弹窗后仍可通过提示音提醒。</p>
-      <h3>同步</h3>
-      <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--fg);margin:0 0 6px"><input id="sync_enabled" type="checkbox" style="width:auto">定时触发思源同步（后台内核不会自己同步，手机端要它才能拿到记录）</label>
-      <div id="syncsetting" style="font-size:12px;color:var(--sub);margin:0 0 10px"></div>
-      <div class="inl" style="align-items:flex-start">
-        <button id="synconow" style="min-width:110px;flex:none">立即同步</button>
-        <div id="syncinfo" style="font-size:12px;color:var(--sub);white-space:pre-wrap"></div>
+
+      <div class="sh">同步</div>
+      <div class="sc">
+        <label class="sr"><span class="sl">定时触发思源同步<small>后台内核不会自己同步，手机端要它才能拿到记录</small></span><input id="sync_enabled" type="checkbox" class="sw"></label>
+        <div class="sr col" style="gap:2px"><div id="syncsetting" class="hint"></div></div>
+        <div class="sr"><button id="synconow">立即同步</button><div id="syncinfo" class="hint" style="white-space:pre-wrap;text-align:right"></div></div>
+        <div id="syncproxy" style="display:none;font-size:12px;color:var(--bad);white-space:pre-wrap;padding:8px 0"></div>
+        <div class="hint" style="padding:8px 0">间隔跟随思源「设置 → 关于 → 同步」里的自动同步间隔；同步本身由思源完成，本工具只负责按时触发。</div>
       </div>
-      <div id="syncproxy" style="display:none;font-size:12px;color:var(--bad);margin-top:8px;white-space:pre-wrap"></div>
-      <div style="font-size:12px;color:var(--sub);margin-top:8px">间隔跟随思源「设置 → 关于 → 同步」里的自动同步间隔；同步本身由思源完成，本工具只负责按时触发。</div>
-      <h3>支持作者</h3>
-      <div style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:14px;background:var(--card);border:1px solid var(--line);border-radius:12px">
+
+      <div class="sh">支持作者</div>
+      <div class="sc" style="padding:14px;text-align:center">
         <img src="donate.jpg" alt="微信打赏二维码" style="width:180px;height:auto;padding:10px;background:#fff;border-radius:8px">
-        <div style="font-size:12px;color:var(--sub)">觉得好用的话，可以微信扫码请作者喝杯咖啡 ☕</div>
+        <div class="hint" style="margin-top:8px">觉得好用的话，可以微信扫码请作者喝杯咖啡 ☕</div>
       </div>
     </section>
   </main>

@@ -126,7 +126,7 @@ pub fn init(app: &mut tauri::App) {
                     let result = if let Some(w) = app.get_webview_window("micro-break") { Ok(w) } else {
                         tauri::WebviewWindowBuilder::new(&app, "micro-break", tauri::WebviewUrl::App("micro-break.html".into()))
                             .title("微休息").skip_taskbar(true)
-                            .inner_size(300.0, 220.0).resizable(false).always_on_top(true).build()
+                            .inner_size(300.0, 250.0).resizable(false).always_on_top(true).build()
                     };
                     if let Ok(w) = result {
                         let _ = w.show(); let _ = w.unminimize(); let _ = w.set_focus();
