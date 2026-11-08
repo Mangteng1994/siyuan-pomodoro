@@ -69,6 +69,7 @@
       <div class="row" style="margin-top:4px"><button id="noteins" title="把悬浮笔记里已勾选的事项放进来">插入完成事项</button><button id="notesave">保存备注</button><button id="noteskip">跳过</button></div>
     </div>
     <div class="row">
+      <button id="tgo" style="display:none" title="沿用上一个任务和专注时长开始新的番茄">开始</button>
       <button id="tpause">暂停</button>
       <button id="tend">结束</button>
       <button id="tshort" style="display:none">短休息</button>
@@ -139,12 +140,24 @@ function progress() {
   if (!st) return 0;
   return Math.max(0, Math.min(1, TimerView.elapsed(st) / st.planned_ms));
 }
+// 记住上一个任务和专注时长：点“完成”清掉计时后，小窗口回到这个任务的“准备开始”
+let last = null;
+try { last = JSON.parse(localStorage.getItem("miniLast") || "null"); } catch {}
+function rememberLast() {
+  if (!st || !st.task || !st.task.title) return;
+  const ms = st.work_ms || (!st.kind || st.kind === "work" ? st.planned_ms : 0) || (last && last.ms) || 25 * 60000;
+  last = { task: st.task, port: st.port, ms };
+  try { localStorage.setItem("miniLast", JSON.stringify(last)); } catch {}
+}
 function render() {
   applyMode();
-  const time = st ? TimerView.fmt(TimerView.remaining(st)) : "--:--";
+  rememberLast();
+  const ready = !st && !!last;
+  const time = st ? TimerView.fmt(TimerView.remaining(st)) : ready ? TimerView.fmt(last.ms) : "--:--";
   $("clock").textContent = time;
   document.title = st && st.status !== "finished" ? `${time} 番茄钟` : "番茄钟";
-  $("info").textContent = st ? TimerView.info(st) : "没有计时（请在主窗口开始专注）";
+  $("info").textContent = st ? TimerView.info(st) : ready ? `准备开始：${last.task.title || "自由专注"}` : "没有计时（请在主窗口开始专注）";
+  $("tgo").style.display = ready ? "" : "none";
   const f = TimerView.flags(st);
   $("tpause").style.display = $("tend").style.display = f.canPause ? "" : "none";
   $("tpause").textContent = f.pauseLabel;
@@ -192,6 +205,7 @@ $("tshort").onclick = () => cmd("timer_start_break", { minutes: TimerView.breakM
 $("tlong").onclick = () => cmd("timer_start_break", { minutes: TimerView.breakMinutes(true), long: true, port: st.port });
 $("tretry").onclick = () => cmd("timer_retry", { port: st.port });
 $("tnext").onclick = () => cmd("timer_next_work", { minutes: null, port: st.port });
+$("tgo").onclick = () => cmd("timer_start", { task: last.task, minutes: last.ms / 60000, port: last.port });
 $("tclear").onclick = () => cmd("timer_clear");
 // 小窗口里系统自带的确认框会被截断，所以改成就地二次确认：第一次点变成“确定放弃？”，4 秒内再点才放弃
 let discardArm = null;
