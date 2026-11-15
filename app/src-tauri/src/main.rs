@@ -413,6 +413,10 @@ fn main() {
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
+                // 遮罩只拦不藏：锁到倒计时结束，由后端在休息结束时隐藏。
+                if window.label() == "break-screen" {
+                    return;
+                }
                 if window.label() == "micro-break" {
                     micro_break::micro_break_dismiss(window.app_handle().clone(), window.state::<micro_break::Handle>());
                 }

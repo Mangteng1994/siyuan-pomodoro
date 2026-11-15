@@ -19,6 +19,10 @@
   <div id="clock">00:00</div>
   <div id="sub"></div>
 <script>
+  // 遮罩期间不接受任何"关掉它"的操作；Alt+F4 由后端的 CloseRequested 拦。
+  for (const type of ["keydown", "contextmenu"]) {
+    window.addEventListener(type, (e) => { e.preventDefault(); e.stopPropagation(); }, true);
+  }
   const inv = (cmd) => window.__TAURI__.core.invoke(cmd);
   const pad = (n) => String(n).padStart(2, "0");
   const fmt = (ms) => {
