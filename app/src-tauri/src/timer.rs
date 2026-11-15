@@ -235,6 +235,21 @@ pub fn init(app: &mut tauri::App) -> Result<(), String> {
             last_try = std::time::Instant::now();
             spawn_write(handle.clone(), shared.clone());
         }
+        // 强制模式：休息运行中且开关开着就盖满屏，条件不成立就收起来。
+        // 每次 250ms 读一次 config，和 micro_break 线程同样的做法。
+        let resting = {
+            let g = shared.lock().unwrap();
+            g.as_ref().map(|s| (s.kind.clone(), s.status == Status::Running))
+        };
+        let force = crate::read_config(&handle).force_break;
+        let want = resting.as_ref().map_or(false, |(kind, running)| {
+            crate::force_break::break_wants_overlay(kind, *running, &force)
+        });
+        if want {
+            crate::force_break::show(&handle, crate::force_break::Owner::Break);
+        } else {
+            crate::force_break::hide_if(&handle, crate::force_break::Owner::Break);
+        }
         }
     });
     Ok(())
