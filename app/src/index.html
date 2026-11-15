@@ -117,6 +117,17 @@
   input.sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .15s; }
   input.sw:checked { background: var(--accent); }
   input.sw:checked::after { transform: translateX(14px); }
+  .sc select, .sc input[type=datetime-local] { font: inherit; font-size: 13px; color: var(--fg); background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px; flex: none; }
+  .sc select { width: 208px; }
+  .sc input[type=datetime-local] { width: 188px; }
+  /* 小问号：解释收进悬浮气泡，不占版面 */
+  .qwrap { position: relative; display: inline-flex; align-items: center; vertical-align: middle; margin-left: 6px; }
+  .qm { width: 15px; height: 15px; border-radius: 50%; border: 1px solid var(--sub); color: var(--sub); font-size: 10px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; cursor: help; outline: none; }
+  .qwrap:hover .qm, .qwrap:focus-within .qm { background: var(--sub); border-color: var(--sub); color: var(--card); }
+  .qwrap .tip { display: none; position: absolute; left: 0; top: calc(100% + 9px); z-index: 30; width: 270px; padding: 9px 11px; border-radius: 8px; background: var(--fg); color: var(--bg); font-size: 12px; line-height: 1.55; font-weight: 400; box-shadow: 0 8px 24px rgba(0,0,0,.22); }
+  .qwrap .tip::before { content: ""; position: absolute; top: -4px; left: 5px; width: 9px; height: 9px; background: var(--fg); transform: rotate(45deg); border-radius: 2px; }
+  .qwrap:hover .tip, .qwrap:focus-within .tip { display: block; }
+  .qwrap .tip b { font-weight: 600; white-space: nowrap; }
 </style>
 </head>
 <body>
@@ -212,6 +223,22 @@
         <label class="sr"><span class="sl">开机自动启动<small>只进托盘，不弹窗口</small></span><input id="autostart" type="checkbox" class="sw"></label>
         <div class="sr"><span class="sl">短休息（分钟）</span><input id="bshort" type="number" min="0.1" step="any" class="sn"></div>
         <div class="sr"><span class="sl">长休息（分钟）</span><input id="blong" type="number" min="0.1" step="any" class="sn"></div>
+      </div>
+
+      <div class="sh">5h limit 时区</div>
+      <div class="sc" id="tzcard">
+        <div class="sr">
+          <span class="sl">时区</span>
+          <select id="tz_zone" aria-label="迷你窗口显示的时区">
+            <option value="">不显示</option>
+            <option value="phoenix">Phoenix（America/Phoenix）</option>
+          </select>
+        </div>
+        <div class="sr" id="tzrow">
+          <span class="sl">目标 limit 时间<span class="qwrap"><span class="qm" tabindex="0" role="button" aria-label="目标时间怎么填">?</span><span class="tip" role="tooltip">按<b>凤凰城当地时间</b>填写，对应北京时间 <b id="tz_bj">—</b>。<br>没设目标时间时，迷你窗只显示凤凰城时间，不出现 left；时间过了也不显示。<br>点迷你窗里的凤凰城时间，会跳到这里来设。</span></span></span>
+          <input id="tz_target" type="datetime-local" aria-label="目标 limit 时间">
+        </div>
+        <div class="sr end" id="tzclear"><button class="ghost" id="tz_clearbtn">清除目标时间</button></div>
       </div>
 
       <div class="sh">随机微休息</div>
@@ -535,6 +562,28 @@ for (const [id, key, long] of [["bshort", "breakShort", false], ["blong", "break
   $(id).value = TimerView.breakMinutes(long);
   $(id).oninput = () => { try { localStorage.setItem(key, $(id).value); } catch {} };
 }
+// ---- 5h limit 时区：设置存 localStorage，迷你窗口读同一份（同源）----
+const TZ_BJ = new Intl.DateTimeFormat("zh-CN", { timeZone: "Asia/Shanghai", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
+function renderTz() {
+  const zone = TZKit.zone();
+  if ($("tz_zone").value !== zone) $("tz_zone").value = zone;
+  const raw = TZKit.targetInput();
+  if ($("tz_target").value !== raw) $("tz_target").value = raw; // 一致时不重设，免得光标跳回开头
+  $("tzrow").style.display = zone ? "" : "none";
+  $("tzclear").style.display = zone && raw ? "" : "none";
+  const t = TZKit.targetMs(zone);
+  $("tz_bj").textContent = t ? TZ_BJ.format(t) : "—";
+}
+$("tz_zone").onchange = () => { TZKit.setZone($("tz_zone").value); renderTz(); };
+$("tz_target").oninput = () => { TZKit.setTarget($("tz_target").value); renderTz(); };
+$("tz_clearbtn").onclick = () => { TZKit.setTarget(""); renderTz(); };
+renderTz();
+// 迷你窗口里点凤凰城时间：唤起主窗口并滚到这张卡片
+window.__TAURI__.event.listen("open-tz-settings", () => {
+  show("set");
+  document.querySelector("main").scrollTop = Math.max(0, $("tzcard").offsetTop - 72);
+});
+
 const startBreak = (long) => {
   const minutes = Number($(long ? "blong" : "bshort").value);
   if (!(minutes > 0)) return say("休息时长必须大于 0，请到设置页修改", false);

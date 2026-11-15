@@ -60,3 +60,78 @@ const TimerView = {
     };
   },
 };
+
+// 5h limit 时区：设置和状态都放在同源 localStorage，主窗口写、迷你窗口读（同 breakShort/breakLong）。
+// 时间换算用 Intl，不依赖 tzdata；目标时间按所选时区的「当地时间」填。
+const TZKit = {
+  ZONES: { phoenix: { label: "Phoenix", short: "凤凰城", tz: "America/Phoenix" } },
+  zone() {
+    let v = "";
+    try { v = localStorage.getItem("tzZone") || ""; } catch {}
+    return this.ZONES[v] ? v : "";
+  },
+  setZone(v) {
+    try { localStorage.setItem("tzZone", this.ZONES[v] ? v : ""); } catch {}
+  },
+  // datetime-local 原样字符串，例：2026-11-16T06:00
+  targetInput() {
+    try { return localStorage.getItem("tzTarget") || ""; } catch { return ""; }
+  },
+  setTarget(v) {
+    try { v ? localStorage.setItem("tzTarget", v) : localStorage.removeItem("tzTarget"); } catch {}
+  },
+  // 某一时刻在指定时区的墙上时间
+  parts(tz, ms) {
+    const f = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz, hourCycle: "h23",
+      year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit",
+    });
+    const o = {};
+    for (const p of f.formatToParts(ms)) if (p.type !== "literal") o[p.type] = Number(p.value);
+    return o;
+  },
+  // 该时刻目标时区相对 UTC 的偏移（毫秒）
+  offset(tz, ms) {
+    const p = this.parts(tz, ms);
+    return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - Math.floor(ms / 1000) * 1000;
+  },
+  // 当地时间 → 真实时刻：先按 UTC 猜一次，再用该时刻的偏移修正一次（夏令时切换那天也对）
+  instant(tz, y, mo, d, h, mi) {
+    const wall = Date.UTC(y, mo - 1, d, h, mi);
+    return wall - this.offset(tz, wall - this.offset(tz, wall));
+  },
+  // 目标时间的真实时刻；没设置或不合法返回 0
+  targetMs(zone = this.zone()) {
+    const z = this.ZONES[zone];
+    if (!z) return 0;
+    const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(this.targetInput());
+    if (!m) return 0;
+    return this.instant(z.tz, +m[1], +m[2], +m[3], +m[4], +m[5]);
+  },
+  hhmmss(zone = this.zone(), now = Date.now()) {
+    const z = this.ZONES[zone];
+    if (!z) return "";
+    const p = this.parts(z.tz, now);
+    const two = (n) => String(n).padStart(2, "0");
+    return `${two(p.hour)}:${two(p.minute)}:${two(p.second)}`;
+  },
+  // 剩余时间 → hh:mm，超过 24 小时按累计小时显示（27:12），不回绕成「1 天」
+  left(ms) {
+    const sec = Math.max(0, Math.floor(ms / 1000));
+    const two = (n) => String(n).padStart(2, "0");
+    return `${two(Math.floor(sec / 3600))}:${two(Math.floor((sec % 3600) / 60))}`;
+  },
+  // 迷你窗口要显示的内容；时区没选返回 null
+  view(zone = this.zone(), now = Date.now()) {
+    const z = this.ZONES[zone];
+    if (!z) return null;
+    const target = this.targetMs(zone);
+    const rest = target - now;
+    return {
+      name: z.short,
+      time: this.hhmmss(zone, now),
+      left: target && rest > 0 ? this.left(rest) : "",
+      target,
+    };
+  },
+};

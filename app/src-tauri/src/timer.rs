@@ -559,7 +559,7 @@ pub fn set_mini_mode(app: AppHandle, mode: String) -> Result<(), String> {
     let w = app.get_webview_window("mini").ok_or("迷你窗口未打开")?;
     let (width, height, decorations) = match mode.as_str() {
         "ring" => (64.0, 64.0, false),
-        "bar" => (190.0, 46.0, false),
+        "bar" => (250.0, 46.0, false),
         "minimal" => (150.0, 22.0, false),
         _ => (250.0, 200.0, true),
     };

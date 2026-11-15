@@ -6,7 +6,7 @@ use std::os::windows::process::CommandExt;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 const KERNEL_IMAGE: &str = "SiYuan-Kernel.exe";
@@ -335,6 +335,14 @@ fn show_main(app: &tauri::AppHandle) {
     }
 }
 
+/// 迷你窗口里点凤凰城时间：唤起主窗口，并让前端滚到设置页的「5h limit 时区」卡片。
+/// 跨窗口 show/focus 没配 ACL 权限，所以放在后端做，顺便省得前端再拼窗口操作。
+#[tauri::command]
+fn open_tz_settings(app: tauri::AppHandle) {
+    show_main(&app);
+    let _ = app.emit("open-tz-settings", ());
+}
+
 /// 托盘常驻：关窗口只是隐藏，计时、提醒、写记录照常；真正退出走托盘菜单。
 fn init_tray(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     use tauri::menu::{Menu, MenuItem};
@@ -431,6 +439,7 @@ fn main() {
             notes::open_notes,
             timer::open_mini,
             timer::set_mini_mode,
+            open_tz_settings,
             sync::sync_status,
             sync::sync_now,
             updater::update_get,

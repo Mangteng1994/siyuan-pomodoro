@@ -33,6 +33,12 @@
   #notebox .row { flex-wrap: nowrap; gap: 6px; }
   #notebox .row button { padding: 0 8px; }
   #normal .row button.primary:hover { opacity: .85; }
+  /* 5h limit 时区：普通模式底部一行，横条模式跟在倒计时后面；点一下回主窗设置 */
+  #normal .tz { margin-top: 8px; font-size: 12px; text-align: center; opacity: .7; font-variant-numeric: tabular-nums; cursor: pointer; }
+  #normal .tz:hover { opacity: 1; text-decoration: underline; }
+  #normal .tz .l { opacity: .75; }
+  #bar .tz { font-size: 10px; opacity: .7; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 0 4px; cursor: pointer; }
+  #bar .tz:hover { opacity: 1; text-decoration: underline; }
 
   /* 迷你模式：无边框、透明背景、可拖动，悬停才出按钮 */
   #compact { display: none; position: relative; width: 100%; height: 100%; }
@@ -96,6 +102,7 @@
       <button id="tdiscard" style="display:none">放弃</button>
       <button id="tclear" style="display:none" title="结束本次计时显示，已保存的番茄记录会保留">完成</button>
     </div>
+    <div class="tz" id="tzn" hidden><span id="tznc"></span><span class="l" id="tznl"></span></div>
   </div>
 
   <div id="compact">
@@ -108,6 +115,7 @@
       <div class="title" id="bt"></div>
       <div class="line">
         <span class="t" id="bc">--:--</span>
+        <span class="tz" id="tzb" hidden></span>
         <span class="acts" style="display:flex"><button class="cbtn" data-act="pause" title="暂停/继续">⏯</button><button class="cbtn" data-act="end" title="结束">⏹</button><button class="cbtn" data-act="cycle" title="切换样式">⇄</button></span>
       </div>
       <div class="track"><div class="fill" id="bf"></div></div>
@@ -216,6 +224,16 @@ function render() {
   for (const b of document.querySelectorAll('#compact [data-act="end"]')) b.style.display = ready ? "none" : "";
   $("nfill").style.width = $("bf").style.width = $("mf").style.width = `${p * 100}%`;
   $("mt").textContent = time;
+  // 5h limit 时区：所选时区的当前时间，设了目标时间就跟着显示还剩多久
+  const tzv = TZKit.view();
+  $("tzn").hidden = $("tzb").hidden = !tzv;
+  if (tzv) {
+    $("tznc").textContent = `${tzv.name} ${tzv.time}`;
+    $("tznl").textContent = tzv.left ? ` · ${tzv.left} left` : "";
+    $("tzb").textContent = tzv.left ? `${tzv.time} · ${tzv.left} left` : tzv.time;
+    $("tzb").title = `${tzv.name} ${tzv.time}${tzv.left ? `，距目标还有 ${tzv.left}` : ""}`;
+    $("tzn").title = "点这里设置 5h limit 目标时间";
+  }
 }
 
 const cmd = async (name, args) => { try { await invoke(name, args); } catch (e) { $("info").textContent = String(e); } };
@@ -247,6 +265,11 @@ $("tdiscard").onclick = () => {
 };
 $("tshrink").onclick = () => setPreferred(STYLES.includes(preferred) ? preferred : "bar");
 
+// 点时区时间：回主窗口设置 5h limit（跨窗口 show/focus 没有权限，走后端命令）
+const openTz = () => invoke("open_tz_settings").catch((e) => ($("info").textContent = String(e)));
+$("tzn").onclick = openTz;
+$("tzb").onclick = openTz;
+
 // 迷你模式里的按钮：暂停/继续、结束、切换样式（圆环→横条→极简→普通→圆环）
 $("compact").addEventListener("click", (e) => {
   const b = e.target.closest("[data-act]");
@@ -264,7 +287,7 @@ $("ring").addEventListener("click", (e) => { if (!e.target.closest("button")) pa
 $("compact").addEventListener("dblclick", (e) => { if (!e.target.closest("button")) setPreferred("normal"); });
 // 无边框窗口：在空白处按下鼠标拖动窗口
 document.body.addEventListener("mousedown", (e) => {
-  if (e.button === 0 && applied !== "normal" && !e.target.closest("button")) {
+  if (e.button === 0 && applied !== "normal" && !e.target.closest("button, .tz")) {
     // 拖动期间系统接管鼠标，松手后不会再收到 mouseleave，:hover 会一直卡住；
     // 所以悬停状态改由脚本控制，开始拖动就收起按钮，等鼠标在窗口里再动一下才重新显示
     setHover(false);
