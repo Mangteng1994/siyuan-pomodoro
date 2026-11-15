@@ -251,6 +251,13 @@
         <div class="sr end"><button id="micro_save">保存</button></div>
       </div>
 
+      <div class="sh">强制模式</div>
+      <div class="sc">
+        <label class="sr"><span class="sl">微休息时全屏遮挡<small>到点盖满屏幕跑倒计时，中途关不掉</small></span><input id="force_micro" type="checkbox" class="sw"></label>
+        <label class="sr"><span class="sl">短休息时全屏遮挡<small>休息结束自动收起，回到迷你窗</small></span><input id="force_short" type="checkbox" class="sw"></label>
+        <label class="sr"><span class="sl">长休息时全屏遮挡<small>逃生口：托盘菜单里还能退出程序</small></span><input id="force_long" type="checkbox" class="sw"></label>
+      </div>
+
       <div class="sh">同步</div>
       <div class="sc">
         <label class="sr"><span class="sl">定时触发思源同步<small>后台内核不会自己同步，手机端要它才能拿到记录</small></span><input id="sync_enabled" type="checkbox" class="sw"></label>
@@ -310,6 +317,11 @@ const readConfig = () => ({
     duration_seconds: Number($("micro_seconds").value),
     popup: $("micro_popup").checked,
     sound: $("micro_sound").checked,
+  },
+  force_break: {
+    micro: $("force_micro").checked,
+    short: $("force_short").checked,
+    long: $("force_long").checked,
   },
 });
 
@@ -538,6 +550,9 @@ $("synconow").onclick = async () => {
   refreshSync(); refresh();
 };
 $("sync_enabled").onchange = () => invoke("save_config", { config: readConfig() });
+for (const id of ["force_micro", "force_short", "force_long"]) {
+  $(id).onchange = () => invoke("save_config", { config: readConfig() });
+}
 $("micro_save").onclick = async () => {
   const config = readConfig();
   const m = config.micro_break;
@@ -679,6 +694,10 @@ setInterval(renderClock, 250);
   $("sync_enabled").checked = c.sync_enabled !== false;
   const micro = c.micro_break || {};
   $("micro_enabled").checked = micro.enabled === true;
+  const force = c.force_break || {};
+  $("force_micro").checked = force.micro === true;
+  $("force_short").checked = force.short === true;
+  $("force_long").checked = force.long === true;
   $("micro_min").value = micro.min_minutes ?? 3;
   $("micro_max").value = micro.max_minutes ?? 5;
   $("micro_seconds").value = micro.duration_seconds ?? 10;
