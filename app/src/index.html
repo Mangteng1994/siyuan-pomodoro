@@ -255,7 +255,8 @@
       <div class="sc">
         <label class="sr"><span class="sl">微休息时全屏遮挡<small>到点盖满屏幕跑倒计时，中途关不掉</small></span><input id="force_micro" type="checkbox" class="sw"></label>
         <label class="sr"><span class="sl">短休息时全屏遮挡<small>休息结束自动收起，回到迷你窗</small></span><input id="force_short" type="checkbox" class="sw"></label>
-        <label class="sr"><span class="sl">长休息时全屏遮挡<small>逃生口：托盘菜单里还能退出程序</small></span><input id="force_long" type="checkbox" class="sw"></label>
+        <label class="sr"><span class="sl">长休息时全屏遮挡<small>休息结束自动收起，回到迷你窗</small></span><input id="force_long" type="checkbox" class="sw"></label>
+        <div class="hint" style="padding:8px 0">逃生口：Ctrl+Shift+Esc 打开任务管理器，结束本程序。</div>
       </div>
 
       <div class="sh">同步</div>
@@ -551,7 +552,12 @@ $("synconow").onclick = async () => {
 };
 $("sync_enabled").onchange = () => invoke("save_config", { config: readConfig() });
 for (const id of ["force_micro", "force_short", "force_long"]) {
-  $(id).onchange = () => invoke("save_config", { config: readConfig() });
+  $(id).onchange = async () => {
+    const was = !$(id).checked;
+    // 整表提交，别的字段不合法时会保存失败；失败就把开关退回原样，别让它看着是开的
+    if (await cmd("save_config", { config: readConfig() })) say("强制模式已保存");
+    else $(id).checked = was;
+  };
 }
 $("micro_save").onclick = async () => {
   const config = readConfig();

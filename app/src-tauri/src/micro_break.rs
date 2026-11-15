@@ -95,8 +95,11 @@ pub fn init(app: &mut tauri::App) {
             }
             // 遮罩跟着「微休息进行中 且 强制开关开着」走，任何一条不成立就收起；
             // 放在所有 continue 之前，免得中途关掉开关后遮罩一直留在屏幕上。
+            // show() 是幂等的：休息中途把开关打开，下一秒遮罩也会补上。
             let overlay_on = force.micro && app.state::<Handle>().0.lock().unwrap().active;
-            if !overlay_on {
+            if overlay_on {
+                crate::force_break::show(&app, crate::force_break::Owner::Micro);
+            } else {
                 crate::force_break::hide_if(&app, crate::force_break::Owner::Micro);
             }
             let snap = app.state::<crate::timer::TimerHandle>().0.lock().unwrap().clone();
@@ -130,22 +133,22 @@ pub fn init(app: &mut tauri::App) {
                 end = Some(now + Duration::from_secs(settings.duration_seconds as u64));
                 publish(&app, View { active: true, remaining_seconds: settings.duration_seconds });
                 if settings.sound { beep(); }
-                // 强制模式开着就全屏遮罩，否则还是原来 300×250 的小窗；
-                // 两个都没开就不弹（只看提示音）。
-                if force.micro {
-                    crate::force_break::show(&app, crate::force_break::Owner::Micro);
-                } else if settings.popup {
-                    let result = if let Some(w) = app.get_webview_window("micro-break") { Ok(w) } else {
-                        tauri::WebviewWindowBuilder::new(&app, "micro-break", tauri::WebviewUrl::App("micro-break.html".into()))
-                            .title("微休息").skip_taskbar(true)
-                            .inner_size(300.0, 250.0).resizable(false).always_on_top(true).build()
-                    };
-                    if let Ok(w) = result {
-                        let _ = w.show(); let _ = w.unminimize(); let _ = w.set_focus();
+                // 遮罩在上面的守卫里按开关处理过了；这里只管不开强制模式时的 300×250 小窗，
+                // 小窗也没开就不弹（只看提示音）。
+                if !force.micro {
+                    if settings.popup {
+                        let result = if let Some(w) = app.get_webview_window("micro-break") { Ok(w) } else {
+                            tauri::WebviewWindowBuilder::new(&app, "micro-break", tauri::WebviewUrl::App("micro-break.html".into()))
+                                .title("微休息").skip_taskbar(true)
+                                .inner_size(300.0, 250.0).resizable(false).always_on_top(true).build()
+                        };
+                        if let Ok(w) = result {
+                            let _ = w.show(); let _ = w.unminimize(); let _ = w.set_focus();
+                        }
+                    } else if let Some(w) = app.get_webview_window("micro-break") {
+                        // 小窗也不该弹时，把可能还留着的小窗收起来
+                        let _ = w.hide();
                     }
-                } else if let Some(w) = app.get_webview_window("micro-break") {
-                    // 强制没开、小窗也不该弹时，把可能还留着的小窗收起来
-                    let _ = w.hide();
                 }
             }
         }

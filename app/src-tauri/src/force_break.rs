@@ -2,7 +2,8 @@
 
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
-use tauri::{AppHandle, Manager};
+use std::time::{Duration, Instant};
+use tauri::{AppHandle, Manager, WebviewWindow};
 
 /// 三个独立的强制模式开关；老配置里没有这一段时全部按关闭处理。
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -25,42 +26,56 @@ pub fn break_wants_overlay(kind: &str, running: bool, force: &ForceBreak) -> boo
     }
 }
 
+/// 遮罩归谁所有：微休息与短/长休息是两条独立的线程，靠它避免互相把对方的遮罩关掉。
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Owner {
     Micro,
     Break,
 }
 
-pub struct Screen(pub Mutex<Option<Owner>>);
+/// 建窗失败后的冷却时间：失败一次就别每 250ms 重试，否则 stderr 会被刷满。
+const RETRY_AFTER: Duration = Duration::from_secs(2);
 
-pub fn init(app: &mut tauri::App) {
-    app.manage(Screen(Mutex::new(None)));
-}
+/// 和遮罩同一置顶层的窗口。遮罩期间必须把它们降下去：它们和遮罩都在置顶层，
+/// 点一下它们在屏幕上的位置就会被抬到遮罩之上，落下的那一下点击能直接结束休息。
+const PEERS: [&str; 3] = ["mini", "notes", "micro-break"];
 
 const LABEL: &str = "break-screen";
 
-/// 显示遮罩。窗口第一次用时创建，之后复用。
-pub fn show(app: &AppHandle, owner: Owner) {
-    let state = app.state::<Screen>();
-    {
-        let mut cur = state.0.lock().unwrap();
-        if *cur == Some(owner) {
-            if let Some(w) = app.get_webview_window(LABEL) {
-                let _ = w.show();
-                let _ = w.unminimize();
-                let _ = w.set_focus();
-            }
-            return;
-        }
-        *cur = Some(owner);
+#[derive(Default)]
+pub struct Slot {
+    pub owner: Option<Owner>,
+    failed_at: Option<Instant>,
+}
+
+pub struct Screen(pub Mutex<Slot>);
+
+pub fn init(app: &mut tauri::App) {
+    app.manage(Screen(Mutex::new(Slot::default())));
+}
+
+/// 记录归属。返回 true 表示「此前不是它」，调用方需要真正显示并聚焦一次。
+pub fn claim(cur: &mut Option<Owner>, want: Owner) -> bool {
+    if *cur == Some(want) {
+        false
+    } else {
+        *cur = Some(want);
+        true
     }
-    let built = match app.get_webview_window(LABEL) {
-        Some(w) => Ok(w),
-        None => tauri::WebviewWindowBuilder::new(
-            app,
-            LABEL,
-            tauri::WebviewUrl::App("break-screen.html".into()),
-        )
+}
+
+/// 只有当前持有者才能收回遮罩；返回 true 表示确实该隐藏窗口。
+pub fn release(cur: &mut Option<Owner>, owner: Owner) -> bool {
+    if *cur == Some(owner) {
+        *cur = None;
+        true
+    } else {
+        false
+    }
+}
+
+fn build(app: &AppHandle) -> tauri::Result<WebviewWindow> {
+    tauri::WebviewWindowBuilder::new(app, LABEL, tauri::WebviewUrl::App("break-screen.html".into()))
         .title("休息")
         .fullscreen(true)
         .decorations(false)
@@ -68,18 +83,50 @@ pub fn show(app: &AppHandle, owner: Owner) {
         .skip_taskbar(true)
         .resizable(false)
         .focused(true)
-        .build(),
-    };
-    match built {
-        Ok(w) => {
-            let _ = w.show();
-            let _ = w.unminimize();
-            let _ = w.set_focus();
+        // 页面首帧是深色，窗口底色也用深色，免得弹出瞬间闪一下白屏
+        .background_color(tauri::window::Color(17, 17, 17, 255))
+        .build()
+}
+
+/// 显示遮罩。窗口第一次用时创建，之后每 250ms 复用同一次（只刷新可见状态，不再抢焦点）。
+pub fn show(app: &AppHandle, owner: Owner) {
+    let state = app.state::<Screen>();
+    // 锁内只做判定与置位：下面的窗口操作会阻塞在主线程 dispatcher 上，
+    // 拿着 Screen 的锁去等它，主线程一旦也来取锁就会死锁。
+    let fresh = {
+        let mut slot = state.0.lock().unwrap();
+        if slot.failed_at.is_some_and(|t| t.elapsed() < RETRY_AFTER) {
+            return;
         }
-        Err(e) => {
-            // 遮罩建不出来不影响计时，清掉 owner 下一次还能重试
-            eprintln!("break-screen 创建失败：{e}");
-            *state.0.lock().unwrap() = None;
+        claim(&mut slot.owner, owner)
+    };
+
+    let window = match app.get_webview_window(LABEL) {
+        Some(w) => w,
+        None => match build(app) {
+            Ok(w) => w,
+            Err(e) => {
+                // 遮罩建不出来不影响计时，清掉归属，过一会儿再试
+                eprintln!("break-screen 创建失败：{e}");
+                let mut slot = state.0.lock().unwrap();
+                slot.owner = None;
+                slot.failed_at = Some(Instant::now());
+                return;
+            }
+        },
+    };
+    state.0.lock().unwrap().failed_at = None;
+
+    let _ = window.show();
+    let _ = window.unminimize();
+    if fresh {
+        // 只在这一轮第一次显示时抢焦点。每 250ms 抢一次会把托盘菜单顶掉，
+        // 而托盘「退出」是遮罩期间唯一的逃生口。
+        let _ = window.set_focus();
+    }
+    for label in PEERS {
+        if let Some(w) = app.get_webview_window(label) {
+            let _ = w.set_always_on_top(false);
         }
     }
 }
@@ -87,12 +134,17 @@ pub fn show(app: &AppHandle, owner: Owner) {
 /// 只有当前 owner 才能把遮罩关掉，避免微休息与休息互相串台。
 pub fn hide_if(app: &AppHandle, owner: Owner) {
     let state = app.state::<Screen>();
-    {
-        let mut cur = state.0.lock().unwrap();
-        if *cur != Some(owner) {
-            return;
+    let hide = {
+        let mut slot = state.0.lock().unwrap();
+        release(&mut slot.owner, owner)
+    };
+    if !hide {
+        return;
+    }
+    for label in PEERS {
+        if let Some(w) = app.get_webview_window(label) {
+            let _ = w.set_always_on_top(true);
         }
-        *cur = None;
     }
     if let Some(w) = app.get_webview_window(LABEL) {
         let _ = w.hide();
@@ -127,5 +179,35 @@ mod tests {
         assert!(break_wants_overlay("longBreak", true, &long_on));
         assert!(!break_wants_overlay("longBreak", false, &long_on));
         assert!(!break_wants_overlay("shortBreak", false, &short_on));
+    }
+
+    #[test]
+    fn claim_is_idempotent_and_switches_owner() {
+        let mut cur = None;
+        assert!(claim(&mut cur, Owner::Micro));
+        assert_eq!(cur, Some(Owner::Micro));
+        // 同一轮里每次 tick 都调一次，重复调用不该再触发聚焦
+        assert!(!claim(&mut cur, Owner::Micro));
+        assert!(claim(&mut cur, Owner::Break));
+        assert_eq!(cur, Some(Owner::Break));
+    }
+
+    #[test]
+    fn release_only_clears_its_own_owner() {
+        let mut cur = Some(Owner::Break);
+        // 微休息结束不能把正在跑的短休息遮罩关掉
+        assert!(!release(&mut cur, Owner::Micro));
+        assert_eq!(cur, Some(Owner::Break));
+        assert!(release(&mut cur, Owner::Break));
+        assert_eq!(cur, None);
+        // 已经收起来后再收一次，不该再动窗口
+        assert!(!release(&mut cur, Owner::Break));
+    }
+
+    #[test]
+    fn released_overlay_can_be_claimed_again() {
+        let mut cur = Some(Owner::Micro);
+        assert!(release(&mut cur, Owner::Micro));
+        assert!(claim(&mut cur, Owner::Micro));
     }
 }

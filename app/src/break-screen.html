@@ -19,7 +19,8 @@
   <div id="clock">00:00</div>
   <div id="sub"></div>
 <script>
-  // 遮罩期间不接受任何"关掉它"的操作；Alt+F4 由后端的 CloseRequested 拦。
+  // 遮罩期间不接受任何"关掉它"的操作。真正的锁定在后端（CloseRequested 只拦不藏），
+  // 这里只是别让页面自己响应按键；WebView2 的 F5／Ctrl+R 加速键可能会绕过它，无所谓。
   for (const type of ["keydown", "contextmenu"]) {
     window.addEventListener(type, (e) => { e.preventDefault(); e.stopPropagation(); }, true);
   }
