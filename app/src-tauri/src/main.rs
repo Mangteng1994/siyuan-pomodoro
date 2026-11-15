@@ -24,6 +24,8 @@ pub(crate) struct Config {
     pub sync_enabled: bool,
     #[serde(default)]
     pub micro_break: micro_break::Settings,
+    #[serde(default)]
+    pub force_break: force_break::ForceBreak,
 }
 
 fn default_true() -> bool {
@@ -40,6 +42,7 @@ impl Default for Config {
             api_token: String::new(),
             sync_enabled: true,
             micro_break: micro_break::Settings::default(),
+            force_break: force_break::ForceBreak::default(),
         }
     }
 }
@@ -272,6 +275,7 @@ fn open_ui(port: u16) -> Result<(), String> {
     cmd.spawn().map(|_| ()).map_err(|e| e.to_string())
 }
 
+mod force_break;
 mod mcp;
 
 #[tauri::command]
