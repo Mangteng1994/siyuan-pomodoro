@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>休息</title>
+<style>
+  html, body { height: 100%; margin: 0; }
+  body { background: #111; color: #f5f5f5; display: flex; flex-direction: column;
+         align-items: center; justify-content: center; gap: 18px;
+         font-family: "Microsoft YaHei UI", system-ui, sans-serif;
+         user-select: none; cursor: default; }
+  #title { font-size: 22px; letter-spacing: 4px; color: #9a9a9a; }
+  #clock { font-size: 132px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1; }
+  #sub { font-size: 18px; color: #9a9a9a; }
+</style>
+</head>
+<body>
+  <div id="title">休息一下</div>
+  <div id="clock">00:00</div>
+  <div id="sub"></div>
+<script>
+  const inv = (cmd) => window.__TAURI__.core.invoke(cmd);
+  const pad = (n) => String(n).padStart(2, "0");
+  const fmt = (ms) => {
+    const t = Math.max(0, Math.round(ms / 1000));
+    return pad(Math.floor(t / 60)) + ":" + pad(t % 60);
+  };
+  const human = (ms) => {
+    const t = Math.max(0, Math.round(ms / 1000));
+    const m = Math.floor(t / 60), s = t % 60;
+    return m > 0 ? `还有 ${m} 分 ${s} 秒` : `还有 ${s} 秒`;
+  };
+
+  async function tick() {
+    try {
+      const micro = await inv("micro_break_get");
+      if (micro && micro.active) {
+        document.getElementById("title").textContent = "起来动一下";
+        const ms = micro.remaining_seconds * 1000;
+        document.getElementById("clock").textContent = fmt(ms);
+        document.getElementById("sub").textContent = human(ms);
+        return;
+      }
+      const s = await inv("timer_get");
+      if (!s || s.kind === "work") return;
+      const paused = s.paused_at ? Date.now() - s.paused_at : 0;
+      const elapsed = Date.now() - s.started_at - s.paused_total - paused;
+      const left = s.status === "running" ? s.planned_ms - elapsed : 0;
+      document.getElementById("title").textContent =
+        s.kind === "longBreak" ? "长休息" : "休息一下";
+      document.getElementById("clock").textContent = fmt(left);
+      document.getElementById("sub").textContent = human(left);
+    } catch (e) {
+      /* 读不到就保持上一帧，遮罩本身不负责报错 */
+    }
+  }
+  tick();
+  setInterval(tick, 200);
+</script>
+</body>
+</html>

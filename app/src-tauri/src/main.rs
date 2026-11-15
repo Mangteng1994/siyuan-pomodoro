@@ -398,6 +398,7 @@ fn main() {
             let _ = get_config(app.handle().clone());
             timer::init(app)?;
             micro_break::init(app);
+            force_break::init(app);
             sync::init(app)?;
             updater::init(app)?;
             init_tray(app)?;

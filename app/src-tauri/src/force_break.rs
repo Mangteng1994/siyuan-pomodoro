@@ -1,6 +1,8 @@
 //! 强制模式：休息时全屏遮罩。显示与隐藏全由后端决定，前端只负责画倒计时。
 
 use serde::{Deserialize, Serialize};
+use std::sync::Mutex;
+use tauri::{AppHandle, Manager};
 
 /// 三个独立的强制模式开关；老配置里没有这一段时全部按关闭处理。
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -20,6 +22,80 @@ pub fn break_wants_overlay(kind: &str, running: bool, force: &ForceBreak) -> boo
         "shortBreak" => force.short,
         "longBreak" => force.long,
         _ => false,
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum Owner {
+    Micro,
+    Break,
+}
+
+pub struct Screen(pub Mutex<Option<Owner>>);
+
+pub fn init(app: &mut tauri::App) {
+    app.manage(Screen(Mutex::new(None)));
+}
+
+const LABEL: &str = "break-screen";
+
+/// 显示遮罩。窗口第一次用时创建，之后复用。
+pub fn show(app: &AppHandle, owner: Owner) {
+    let state = app.state::<Screen>();
+    {
+        let mut cur = state.0.lock().unwrap();
+        if *cur == Some(owner) {
+            if let Some(w) = app.get_webview_window(LABEL) {
+                let _ = w.show();
+                let _ = w.unminimize();
+                let _ = w.set_focus();
+            }
+            return;
+        }
+        *cur = Some(owner);
+    }
+    let built = match app.get_webview_window(LABEL) {
+        Some(w) => Ok(w),
+        None => tauri::WebviewWindowBuilder::new(
+            app,
+            LABEL,
+            tauri::WebviewUrl::App("break-screen.html".into()),
+        )
+        .title("休息")
+        .fullscreen(true)
+        .decorations(false)
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .resizable(false)
+        .focused(true)
+        .build(),
+    };
+    match built {
+        Ok(w) => {
+            let _ = w.show();
+            let _ = w.unminimize();
+            let _ = w.set_focus();
+        }
+        Err(e) => {
+            // 遮罩建不出来不影响计时，清掉 owner 下一次还能重试
+            eprintln!("break-screen 创建失败：{e}");
+            *state.0.lock().unwrap() = None;
+        }
+    }
+}
+
+/// 只有当前 owner 才能把遮罩关掉，避免微休息与休息互相串台。
+pub fn hide_if(app: &AppHandle, owner: Owner) {
+    let state = app.state::<Screen>();
+    {
+        let mut cur = state.0.lock().unwrap();
+        if *cur != Some(owner) {
+            return;
+        }
+        *cur = None;
+    }
+    if let Some(w) = app.get_webview_window(LABEL) {
+        let _ = w.hide();
     }
 }
 
